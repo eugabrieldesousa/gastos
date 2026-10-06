@@ -16,7 +16,7 @@ export interface FinanceRepository {
 export class StorageConflictError extends Error {
   constructor() {
     super(
-      "Os dados mudaram em outra aba. Recarregue os dados antes de salvar novamente.",
+      "Os dados mudaram em outra aba ou dispositivo. Recarregue os dados antes de salvar novamente.",
     );
     this.name = "StorageConflictError";
   }

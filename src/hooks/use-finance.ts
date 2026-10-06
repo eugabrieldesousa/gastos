@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { emptyFinanceData, localToday, type FinanceData } from "@/lib/finance";
 import {
@@ -8,10 +8,10 @@ import {
   STORAGE_KEY,
   StorageConflictError,
 } from "@/lib/repository";
+import { RemoteFinanceRepository } from "@/lib/remote-repository";
 
-const repository = new LocalFinanceRepository();
-
-export function useFinance() {
+export function useFinance(userId?: string) {
+  const repository = useMemo(() => userId ? new RemoteFinanceRepository() : new LocalFinanceRepository(), [userId]);
   const [data, setData] = useState<FinanceData>(emptyFinanceData);
   const [loading, setLoading] = useState(true);
   const [ready, setReady] = useState(false);
@@ -20,18 +20,25 @@ export function useFinance() {
   const [today, setToday] = useState("");
   const lock = useRef(false);
   const current = useRef(data);
+  const channel = useRef<BroadcastChannel | null>(null);
+  const mounted = useRef(false);
+  const [localAvailable, setLocalAvailable] = useState(false);
 
   const accept = useCallback((next: FinanceData) => {
+    if (userId && next.revision < current.current.revision) return;
     current.current = next;
     setData(next);
     setReady(true);
     setError(null);
-  }, []);
+  }, [userId]);
 
   const reload = useCallback(async () => {
+    if (lock.current) return;
     try {
-      accept(await repository.read());
+      const next = await repository.read();
+      if (mounted.current) accept(next);
     } catch (cause) {
+      if (!mounted.current) return;
       setError(
         cause instanceof Error
           ? cause.message
@@ -39,12 +46,18 @@ export function useFinance() {
       );
       setReady(false);
     } finally {
-      setToday(localToday());
-      setLoading(false);
+      if (mounted.current) {
+        setToday(localToday());
+        setLoading(false);
+        if (userId) {
+          try { setLocalAvailable(window.localStorage.getItem(STORAGE_KEY) !== null); } catch { /* Local transfer is optional. */ }
+        }
+      }
     }
-  }, [accept]);
+  }, [accept, repository, userId]);
 
   useEffect(() => {
+    mounted.current = true;
     let active = true;
     void repository.read().then(
       (next) => {
@@ -52,6 +65,9 @@ export function useFinance() {
         accept(next);
         setToday(localToday());
         setLoading(false);
+        if (userId) {
+          try { setLocalAvailable(window.localStorage.getItem(STORAGE_KEY) !== null); } catch { /* Local transfer is optional. */ }
+        }
       },
       (cause: unknown) => {
         if (!active) return;
@@ -66,14 +82,34 @@ export function useFinance() {
       },
     );
     const onStorage = (event: StorageEvent) => {
-      if (event.key === STORAGE_KEY || event.key === null) void reload();
+      if (!userId && (event.key === STORAGE_KEY || event.key === null)) void reload();
     };
+    const refresh = () => {
+      if (userId && document.visibilityState === "visible") void reload();
+    };
+    const timer = userId ? window.setInterval(refresh, 30_000) : undefined;
+    if (userId && typeof BroadcastChannel !== "undefined") {
+      channel.current = new BroadcastChannel("mes.finance.account");
+      channel.current.onmessage = (event) => {
+        if (event.data?.userId === userId) refresh();
+      };
+    }
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
     window.addEventListener("storage", onStorage);
     return () => {
       active = false;
+      mounted.current = false;
+      window.clearInterval(timer);
+      channel.current?.close();
+      channel.current = null;
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("storage", onStorage);
     };
-  }, [accept, reload]);
+  }, [accept, reload, repository, userId]);
 
   const commit = async (
     change: (previous: FinanceData) => FinanceData,
@@ -88,6 +124,7 @@ export function useFinance() {
         current.current.revision,
       );
       accept(next);
+      channel.current?.postMessage({ userId });
       toast.success(message);
       return true;
     } catch (cause) {
@@ -110,7 +147,9 @@ export function useFinance() {
     lock.current = true;
     setBusy(true);
     try {
-      accept(await repository.restore(backup));
+      // A cloud restore must not overwrite changes that this device has not read.
+      accept(await (userId ? repository.write(backup, current.current.revision) : repository.restore(backup)));
+      channel.current?.postMessage({ userId });
       toast.success("Backup restaurado.");
       return true;
     } catch (cause) {
@@ -120,6 +159,7 @@ export function useFinance() {
           : "Não foi possível restaurar o backup.";
       setError(message);
       toast.error(message);
+      if (userId && cause instanceof StorageConflictError) setReady(false);
       return false;
     } finally {
       lock.current = false;
@@ -127,5 +167,14 @@ export function useFinance() {
     }
   };
 
-  return { data, loading, ready, busy, error, today, reload, commit, restore };
+  const transferLocal = async () => {
+    if (!userId || current.current.revision !== 0) return false;
+    const local = await new LocalFinanceRepository().read();
+    return commit((previous) => {
+      if (previous.revision !== 0) throw new StorageConflictError();
+      return { ...local, revision: 0 };
+    }, "Dados transferidos para sua conta.");
+  };
+
+  return { data, loading, ready, busy, error, today, reload, commit, restore, localAvailable, transferLocal };
 }
