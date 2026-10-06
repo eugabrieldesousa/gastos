@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import {
   Armchair,
   Banknote,
@@ -54,10 +55,10 @@ export function CategoryMark({ category }: { category?: Category }) {
   const Icon = category ? icons[category.icon] : CircleEllipsis;
   return (
     <span
-      className="category-mark"
+      className={category ? "category-mark data-color" : "category-mark"}
       style={
         category
-          ? { color: category.color, background: `${category.color}14` }
+          ? { "--data-color": category.color } as CSSProperties
           : undefined
       }
     >

@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { formatMoney } from "@/lib/finance";
 
 export type ChartSlice = {
@@ -60,7 +61,8 @@ export function FinanceChart({
                     cy="80"
                     r="60"
                     fill="none"
-                    stroke={slice.color}
+                    className="data-color"
+                    style={{ "--data-color": slice.color } as CSSProperties}
                     strokeWidth="19"
                     pathLength="100"
                     strokeDasharray={`${percent} ${100 - percent}`}
@@ -97,7 +99,7 @@ export function FinanceChart({
                 onClick={() => onSelect(slice.key)}
                 aria-label={`Ver gastos: ${slice.name}`}
               >
-                <i style={{ background: slice.color }} />
+                <i className="data-color" style={{ "--data-color": slice.color } as CSSProperties} />
                 <span>{slice.name}</span>
                 <strong>{((slice.value / total) * 100).toFixed(1)}%</strong>
                 <small>{formatMoney(slice.value)}</small>

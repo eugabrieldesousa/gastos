@@ -5,6 +5,7 @@ import { Plus, Pencil, Upload, Check, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { BankImportGuide } from "./bank-import-guide";
 import { EditorModal, Field, NativeSelect, type ModalProps } from "./finance-editor";
 import type { FinanceSectionProps } from "./debts-panel";
 import { formatMoney, type BankSource, type ColumnMapping, type FinanceData } from "@/lib/finance";
@@ -185,6 +186,7 @@ export function ImportsPanel({ data, today, busy, disabled, saveError, commit }:
     <div className="panel-heading"><div><h2>Importar movimentações</h2><p className="quiet-label">Revise o extrato antes de cadastrar gastos ou vincular pagamentos.</p></div><Button size="sm" disabled={unavailable} onClick={() => { setReturnFocus(document.activeElement as HTMLElement); setSourceForm({ source: null }); }}><Plus size={14} />Nova origem</Button></div>
     <div className="panel-scroll finance-feature-content">
       <p className="field-hint">OFX, CSV, XLS e XLSX · Até 20 MB · Arquivos processados neste navegador. Cada conta ou cartão deve ter sua própria origem.</p>
+      <BankImportGuide source={source} />
       <div className="import-setup-grid">
         <Field label="Origem bancária" id="import-source"><NativeSelect id="import-source" value={sourceId} disabled={unavailable} onChange={(e) => { resetFile(); setSourceId(e.target.value); }}><option value="">Selecione uma origem</option>{data.bankSources.map((s) => <option key={s.id} value={s.id}>{BANK_LABELS[s.bank]} · {s.name} · {s.kind === "card" ? "Cartão" : "Conta"}</option>)}</NativeSelect></Field>
         {source ? <Button variant="outline" disabled={unavailable} onClick={() => { setReturnFocus(document.activeElement as HTMLElement); setSourceForm({ source }); }}><Pencil size={14} />Editar origem</Button> : null}

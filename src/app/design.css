@@ -1,5 +1,4 @@
 :root {
-  color-scheme: light;
   --background: oklch(0.977 0.005 150);
   --foreground: oklch(0.25 0.01 155);
   --card: oklch(1 0 0);
@@ -16,11 +15,179 @@
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.5 0.17 28);
   --border: oklch(0.918 0.006 155);
-  --input: oklch(0.89 0.008 155);
-  --ring: oklch(0.55 0.07 160);
+  --input: oklch(0.61 0.02 155);
+  --ring: oklch(0.5 0.07 160);
   --radius: 0.625rem;
   --sage-surface: oklch(0.949 0.026 155);
   --sage-foreground: oklch(0.36 0.066 158);
+  --sage-border: oklch(0.885 0.031 155);
+  --destructive-foreground: oklch(0.99 0.002 28);
+  --warning: oklch(0.52 0.1 74);
+  --scrollbar-track: var(--background);
+  --scrollbar-thumb: oklch(0.55 0.025 155);
+  --scrollbar-thumb-hover: oklch(0.43 0.04 155);
+  --overlay: oklch(0.2 0.01 155 / 25%);
+  --panel-shadow: 0 2px 3px oklch(0 0 0 / 0.015);
+  --raised-shadow: 0 1px 3px oklch(0 0 0 / 0.06);
+}
+/* App colors live here, after Tailwind's base layer, for both themes. */
+:root.dark {
+  /* Neutral black/graphite surfaces; green is reserved for accents. */
+  --background: oklch(0.17764 0 0);
+  --foreground: oklch(0.97015 0 0);
+  --card: oklch(0.22645 0 0);
+  --popover: oklch(0.26862 0 0);
+  --primary: oklch(0.86489 0.07987 157.20);
+  --primary-foreground: oklch(0.17764 0 0);
+  --secondary: oklch(0.26862 0 0);
+  --muted: oklch(0.26862 0 0);
+  --muted-foreground: oklch(0.80466 0 0);
+  --accent: oklch(0.26862 0 0);
+  --destructive: oklch(0.83119 0.09417 30.47);
+  --destructive-foreground: oklch(0.27 0.04 28);
+  --border: oklch(0.39042 0 0);
+  --input: oklch(0.65996 0 0);
+  --ring: oklch(0.86489 0.07987 157.20);
+  --sage-surface: oklch(0.26032 0 0);
+  --sage-foreground: oklch(0.86489 0.07987 157.20);
+  --sage-border: oklch(0.39042 0 0);
+  --warning: oklch(0.81 0.105 74);
+  --scrollbar-thumb: oklch(0.65996 0 0);
+  --scrollbar-thumb-hover: oklch(0.86489 0.07987 157.20);
+  --overlay: oklch(0 0 0 / 60%);
+  --panel-shadow: 0 2px 5px oklch(0 0 0 / 0.12);
+  --raised-shadow: 0 2px 5px oklch(0 0 0 / 0.2);
+}
+:root,
+:root.dark {
+  --card-foreground: var(--foreground);
+  --popover-foreground: var(--foreground);
+  --secondary-foreground: var(--foreground);
+  --accent-foreground: var(--foreground);
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+  --chart-1: var(--primary);
+  --chart-2: var(--warning);
+  --chart-3: oklch(0.65 0.09 250);
+  --chart-4: oklch(0.65 0.09 320);
+  --chart-5: oklch(0.65 0.09 290);
+  --scrollbar-track: var(--background);
+}
+/* Firefox uses the standard API; Chromium/WebKit use the rounded thumb. */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+@supports selector(::-webkit-scrollbar) {
+  * { scrollbar-color: auto; }
+  *::-webkit-scrollbar { width: 12px; height: 12px; }
+  *::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border: 2px solid var(--scrollbar-track);
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-thumb:hover,
+  *::-webkit-scrollbar-thumb:active { background: var(--scrollbar-thumb-hover); }
+  *::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
+}
+@media (forced-colors: active) {
+  * { scrollbar-color: auto; }
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner { background: Canvas; }
+  *::-webkit-scrollbar-thumb { background: ButtonText; border-color: Canvas; }
+  *::-webkit-scrollbar-thumb:hover,
+  *::-webkit-scrollbar-thumb:active { background: Highlight; }
+}
+.data-color {
+  --data-color-display: color-mix(in oklch, var(--data-color), black 20%);
+}
+.dark .data-color {
+  --data-color-display: color-mix(in oklch, var(--data-color), white 35%);
+}
+.donut .data-color { stroke: var(--data-color-display); }
+.chart-legend .data-color { background: var(--data-color-display); }
+.category-mark.data-color {
+  color: var(--data-color-display);
+  background: var(--secondary);
+}
+[data-slot="dialog-overlay"],
+[data-slot="alert-dialog-overlay"] { background: var(--overlay); }
+[data-slot="input"] { background: var(--card); }
+[data-slot="input"]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+[data-slot="dropdown-menu-content"]:focus-visible,
+[data-slot="select-content"]:focus-visible { outline: 2px solid var(--ring); }
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.theme-button {
+  height: 32px;
+  min-width: 94px;
+  font-size: 12px;
+  color: var(--foreground);
+  background: var(--card);
+}
+.theme-option { min-height: 36px; }
+.bank-guide {
+  margin-block: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--background);
+}
+.bank-guide > summary {
+  padding: 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 550;
+}
+.bank-guide summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -3px;
+  border-radius: 9px;
+}
+.bank-guide-content { padding: 0 12px 12px; }
+.bank-guide-intro { font-size: 12px; line-height: 1.7; }
+.bank-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.bank-guide-bank {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  min-width: 0;
+}
+.bank-guide-bank.is-selected { border-color: var(--primary); }
+.bank-guide-bank h3 { font-size: 14px; font-weight: 600; }
+.bank-guide-kind { margin-top: 12px; padding-left: 10px; border-left: 2px solid var(--border); }
+.bank-guide-kind.is-selected { border-left-color: var(--primary); }
+.bank-guide-kind h4 { font-size: 12px; font-weight: 600; }
+.bank-guide-selected { display: block; margin-block: 4px; font-size: 11px; color: var(--primary); }
+.bank-guide-kind p { margin-top: 5px; font-size: 12px; line-height: 1.7; }
+.bank-guide a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+.bank-guide a:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.bank-guide-note { margin-top: 12px; }
+@media (max-width: 899px) {
+  .bank-guide-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 359px) {
+  .header-actions { gap: 4px; }
+  .theme-button,
+  .header-actions .backup-button {
+    min-width: 0;
+    padding-inline: 8px;
+    gap: 4px;
+  }
 }
 html,
 body {
@@ -215,7 +382,7 @@ select:focus-visible {
   border: 1px solid var(--border);
   border-radius: 11px;
   background: var(--card);
-  box-shadow: 0 2px 3px oklch(0 0 0 / 0.015);
+  box-shadow: var(--panel-shadow);
 }
 .summary-label {
   display: flex;
@@ -250,7 +417,7 @@ select:focus-visible {
 }
 .remaining-card {
   background: var(--sage-surface);
-  border-color: oklch(0.885 0.031 155);
+  border-color: var(--sage-border);
 }
 .remaining-card .summary-value,
 .remaining-card .summary-label,
@@ -330,7 +497,7 @@ select:focus-visible {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  box-shadow: 0 2px 3px oklch(0 0 0 / 0.012);
+  box-shadow: var(--panel-shadow);
 }
 .full-panel {
   height: 100%;
@@ -362,8 +529,6 @@ select:focus-visible {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--input) transparent;
 }
 .panel-footer {
   display: flex;
@@ -399,9 +564,7 @@ select:focus-visible {
   gap: 12px;
   padding: 0 16px 12px;
   min-height: 0;
-  overflow: auto;
-  scrollbar-width: thin;
-}
+  overflow: auto;}
 .donut-wrap {
   width: clamp(120px, 11vw, 175px);
   flex-shrink: 0;
@@ -439,9 +602,7 @@ select:focus-visible {
   flex: 1;
   min-width: 0;
   max-height: 100%;
-  overflow: auto;
-  scrollbar-width: thin;
-}
+  overflow: auto;}
 .chart-legend button {
   display: grid;
   grid-template-columns: 7px minmax(0, 1fr) auto;
@@ -500,9 +661,7 @@ select:focus-visible {
 }
 .insights-body {
   padding: 0 16px 12px;
-  overflow: auto;
-  scrollbar-width: thin;
-}
+  overflow: auto;}
 .salary-insight {
   display: flex;
   align-items: center;
@@ -626,7 +785,7 @@ select:focus-visible {
   border-bottom: 0;
 }
 .expense-item:hover {
-  background: oklch(0.99 0.003 155);
+  background: var(--secondary);
 }
 .expense-description {
   display: flex;
@@ -755,7 +914,7 @@ select:focus-visible {
 .status-filters button[aria-selected="true"] {
   background: var(--card);
   color: var(--foreground);
-  box-shadow: 0 1px 3px #0000000f;
+  box-shadow: var(--raised-shadow);
 }
 .filter-bar {
   display: flex;
@@ -1078,9 +1237,7 @@ select:focus-visible {
 }
 @media (max-width: 899px) {
   .workspace-content {
-    overflow: auto;
-    scrollbar-width: thin;
-  }
+    overflow: auto;  }
   .overview-content {
     display: block;
   }
@@ -1381,7 +1538,7 @@ select:focus-visible {
 .import-raw-preview table { border-collapse: collapse; width: 100%; font-size: 11px; }
 .import-raw-preview td, .import-raw-preview th { padding: 8px; border: 1px solid var(--border); white-space: nowrap; }
 .import-review-row { padding: 16px; border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; gap: 10px; content-visibility: auto; contain-intrinsic-size: auto 180px; }
-.import-review-row.needs-review { border-left: 3px solid #d19845; }
+.import-review-row.needs-review { border-left: 3px solid var(--warning); }
 .import-row-heading { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; font-size: 13px; }
 .import-row-heading > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
 .import-row-heading > strong { white-space: nowrap; font-variant-numeric: tabular-nums; }

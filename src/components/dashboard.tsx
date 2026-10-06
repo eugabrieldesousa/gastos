@@ -53,6 +53,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Toaster } from "@/components/ui/sonner";
+import { ThemeMenu } from "@/components/theme-menu";
 import { SalaryDialog } from "@/components/finance-dialogs";
 import {
   CardEditor,
@@ -307,35 +308,38 @@ export function Dashboard() {
             </span>
           </Link>
           <span className="header-tagline">Seu dinheiro, com clareza.</span>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                ref={backupButton}
-                variant="outline"
-                className="backup-button"
-                disabled={loading || busy || readingBackup}
-              >
-                {readingBackup ? (
-                  <LoaderCircle className="animate-spin" />
-                ) : (
-                  <Download size={14} />
-                )}
-                Backup
-                <ChevronDown size={13} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled={!ready} onSelect={exportBackup}>
-                <Download />
-                Exportar backup
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
-                <Upload />
-                Restaurar backup
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="header-actions">
+            <ThemeMenu />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  ref={backupButton}
+                  variant="outline"
+                  className="backup-button"
+                  disabled={loading || busy || readingBackup}
+                >
+                  {readingBackup ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : (
+                    <Download size={14} />
+                  )}
+                  Backup
+                  <ChevronDown size={13} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={!ready} onSelect={exportBackup}>
+                  <Download />
+                  Exportar backup
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
+                  <Upload />
+                  Restaurar backup
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           <input
             ref={fileInput}
             type="file"
@@ -1304,7 +1308,7 @@ export function Dashboard() {
             <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               disabled={busy}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-destructive text-[var(--destructive-foreground)] hover:bg-destructive/90"
               onClick={async (event) => {
                 event.preventDefault();
                 if (
