@@ -9,18 +9,15 @@
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
-    "prebuild": "node scripts/migrate.mjs --if-configured",
     "start": "next start --hostname 127.0.0.1",
     "lint": "eslint src tests next.config.ts vitest.config.ts playwright.config.ts playwright.auth.config.ts eslint.config.mjs postcss.config.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:auth": "playwright test --config playwright.auth.config.ts",
-    "db:migrate": "node scripts/migrate.mjs",
     "auth:secret": "node scripts/create-auth-secret.mjs"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.2.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "lucide-react": "^1.52.0",

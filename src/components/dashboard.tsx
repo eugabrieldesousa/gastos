@@ -107,7 +107,7 @@ const pages = [
 ] as const;
 type PageName = (typeof pages)[number]["id"];
 
-export function Dashboard({ account, cloudEnabled = false }: { account?: FinanceAccount; cloudEnabled?: boolean }) {
+export function Dashboard({ account, cloudEnabled = false, historyUrl }: { account?: FinanceAccount; cloudEnabled?: boolean; historyUrl?: string }) {
   const finance = useFinance(account?.id);
   const { data, loading, ready, busy, error, today } = finance;
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
@@ -340,7 +340,7 @@ export function Dashboard({ account, cloudEnabled = false }: { account?: Finance
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <AccountMenu account={account} enabled={cloudEnabled} busy={busy} canTransfer={ready && data.revision === 0 && finance.localAvailable} reload={finance.reload} transfer={finance.transferLocal} />
+            <AccountMenu account={account} enabled={cloudEnabled} busy={busy} canTransfer={ready && data.revision === 0 && finance.localAvailable} reload={finance.reload} transfer={finance.transferLocal} historyUrl={historyUrl} />
           </div>
           <input
             ref={fileInput}
@@ -1186,7 +1186,7 @@ export function Dashboard({ account, cloudEnabled = false }: { account?: Finance
         <footer className="workspace-footer">
           <span>
             <ShieldCheck size={12} />
-            {account ? (busy ? "Salvando na sua conta…" : error ? "Sincronização pendente" : loading ? "Carregando sua conta…" : "Salvo na sua conta") : "Salvo neste navegador"}
+            {account ? (busy ? "Salvando no GitHub…" : error ? "Sincronização pendente" : loading ? "Carregando sua conta…" : "Salvo no GitHub") : "Salvo neste navegador"}
           </span>
           <span>Um mês de cada vez.</span>
         </footer>

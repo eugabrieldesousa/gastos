@@ -12,7 +12,9 @@ test("login ainda não configurado informa o estado e preserva dados locais", as
   const response = await page.request.get("/api/finance");
   expect(response.status()).toBe(401);
   await page.setViewportSize({ width: 320, height: 740 });
-  const bounds = await page.locator(".header-actions").boundingBox();
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320);
+  await expect.poll(async () => {
+    const bounds = await page.locator(".header-actions").boundingBox();
+    return bounds!.x + bounds!.width;
+  }).toBeLessThanOrEqual(320);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });

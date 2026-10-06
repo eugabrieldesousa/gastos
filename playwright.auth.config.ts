@@ -4,7 +4,7 @@ import baseConfig from "./playwright.config";
 
 const baseURL = "http://127.0.0.1:3003";
 
-/** Tests OAuth initiation without calling GitHub or a real database. */
+/** Tests OAuth initiation without calling GitHub or writing financial data. */
 export default defineConfig({
   ...baseConfig,
   testDir: "./tests/auth",
@@ -21,7 +21,8 @@ export default defineConfig({
       AUTH_GITHUB_SECRET: "oauth-test-secret",
       AUTH_URL: baseURL,
       AUTH_TRUST_HOST: "true",
-      DATABASE_URL: "postgresql://test:test@unused.invalid/test",
+      GITHUB_DATA_REPOSITORY: "test-owner/test-data",
+      GITHUB_DATA_TOKEN: "oauth-test-data-token",
     },
   },
 });

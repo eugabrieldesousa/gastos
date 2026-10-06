@@ -20,25 +20,26 @@ export function useFinance(userId?: string) {
   const [today, setToday] = useState("");
   const lock = useRef(false);
   const current = useRef(data);
+  const generation = useRef(0);
   const channel = useRef<BroadcastChannel | null>(null);
   const mounted = useRef(false);
   const [localAvailable, setLocalAvailable] = useState(false);
 
   const accept = useCallback((next: FinanceData) => {
-    if (userId && next.revision < current.current.revision) return;
     current.current = next;
     setData(next);
     setReady(true);
     setError(null);
-  }, [userId]);
+  }, []);
 
   const reload = useCallback(async () => {
     if (lock.current) return;
+    const requestGeneration = ++generation.current;
     try {
       const next = await repository.read();
-      if (mounted.current) accept(next);
+      if (mounted.current && requestGeneration === generation.current) accept(next);
     } catch (cause) {
-      if (!mounted.current) return;
+      if (!mounted.current || requestGeneration !== generation.current) return;
       setError(
         cause instanceof Error
           ? cause.message
@@ -46,7 +47,7 @@ export function useFinance(userId?: string) {
       );
       setReady(false);
     } finally {
-      if (mounted.current) {
+      if (mounted.current && requestGeneration === generation.current) {
         setToday(localToday());
         setLoading(false);
         if (userId) {
@@ -59,9 +60,10 @@ export function useFinance(userId?: string) {
   useEffect(() => {
     mounted.current = true;
     let active = true;
+    const requestGeneration = ++generation.current;
     void repository.read().then(
       (next) => {
-        if (!active) return;
+        if (!active || requestGeneration !== generation.current) return;
         accept(next);
         setToday(localToday());
         setLoading(false);
@@ -70,7 +72,7 @@ export function useFinance(userId?: string) {
         }
       },
       (cause: unknown) => {
-        if (!active) return;
+        if (!active || requestGeneration !== generation.current) return;
         setError(
           cause instanceof Error
             ? cause.message
@@ -117,6 +119,7 @@ export function useFinance(userId?: string) {
   ): Promise<boolean> => {
     if (lock.current || !ready) return false;
     lock.current = true;
+    generation.current++;
     setBusy(true);
     try {
       const next = await repository.write(
@@ -134,7 +137,7 @@ export function useFinance(userId?: string) {
           : "Não foi possível salvar seus dados.";
       setError(message);
       toast.error(message);
-      if (cause instanceof StorageConflictError) setReady(false);
+      if (userId || cause instanceof StorageConflictError) setReady(false);
       return false;
     } finally {
       lock.current = false;
@@ -145,6 +148,7 @@ export function useFinance(userId?: string) {
   const restore = async (backup: FinanceData): Promise<boolean> => {
     if (lock.current) return false;
     lock.current = true;
+    generation.current++;
     setBusy(true);
     try {
       // A cloud restore must not overwrite changes that this device has not read.
@@ -159,7 +163,7 @@ export function useFinance(userId?: string) {
           : "Não foi possível restaurar o backup.";
       setError(message);
       toast.error(message);
-      if (userId && cause instanceof StorageConflictError) setReady(false);
+      if (userId) setReady(false);
       return false;
     } finally {
       lock.current = false;

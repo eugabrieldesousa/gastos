@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LogIn, LogOut, RefreshCw, Upload, UserRound } from "lucide-react";
+import { History, LogIn, LogOut, RefreshCw, Upload, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { loginWithGitHub, logout } from "@/app/account-actions";
 import { Button } from "@/components/ui/button";
@@ -11,13 +11,14 @@ import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescript
 
 export type FinanceAccount = { id: string; name: string };
 
-export function AccountMenu({ account, enabled, busy, canTransfer, reload, transfer }: {
+export function AccountMenu({ account, enabled, busy, canTransfer, reload, transfer, historyUrl }: {
   account?: FinanceAccount;
   enabled: boolean;
   busy: boolean;
   canTransfer: boolean;
   reload: () => Promise<void>;
   transfer: () => Promise<boolean>;
+  historyUrl?: string;
 }) {
   const [notice, setNotice] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -59,6 +60,7 @@ export function AccountMenu({ account, enabled, busy, canTransfer, reload, trans
         <div className="account-summary"><strong>{account.name}</strong><span>Conta conectada ao GitHub</span></div>
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={busy} onSelect={() => void reload()}><RefreshCw />Atualizar dados da conta</DropdownMenuItem>
+        {historyUrl && <DropdownMenuItem asChild><a href={historyUrl} target="_blank" rel="noopener noreferrer"><History />Ver histórico no GitHub</a></DropdownMenuItem>}
         {canTransfer && <DropdownMenuItem disabled={busy} onSelect={() => setConfirm(true)}><Upload />Transferir dados deste navegador</DropdownMenuItem>}
         <DropdownMenuSeparator />
         <form action={logout}><Button disabled={busy} type="submit" variant="ghost" className="w-full justify-start"><LogOut />Sair da conta</Button></form>

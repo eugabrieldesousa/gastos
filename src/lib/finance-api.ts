@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { financeSchema } from "./finance";
-import type { CloudStore } from "./cloud-store";
+import { CloudStoreError, type CloudStore } from "./cloud-store";
 import { StorageConflictError } from "./repository";
 
 const MAX_BYTES = 4 * 1024 * 1024;
 const writeSchema = z.object({
   data: financeSchema,
   expectedRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER - 1),
+  expectedSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/),
 }).strict();
 const headers = { "Cache-Control": "private, no-store", Vary: "Cookie" };
 
@@ -32,13 +33,14 @@ export function financeApi(store: CloudStore, identify: () => Promise<string | n
       try { parsed = JSON.parse(raw); } catch { return reply({ error: "JSON inválido." }, 400); }
       const result = writeSchema.safeParse(parsed);
       if (!result.success) return reply({ error: "Os dados enviados são inválidos." }, 400);
-      const { data, expectedRevision } = result.data;
+      const { data, expectedRevision, expectedSnapshotHash } = result.data;
       if (data.revision !== expectedRevision)
         return reply({ error: "A revisão dos dados é inválida." }, 400);
-      return reply(await store.write(userId, data, expectedRevision));
+      return reply(await store.write(userId, data, expectedRevision, expectedSnapshotHash));
     } catch (cause) {
       if (cause instanceof StorageConflictError) return reply({ error: cause.message }, 409);
-      // Do not expose database errors, queries, or connection strings.
+      if (cause instanceof CloudStoreError) return reply({ error: cause.message }, cause.status);
+      // Do not expose upstream errors, URLs, or access tokens.
       return reply({ error: "Não foi possível acessar os dados da sua conta. Tente recarregar." }, 503);
     }
   };
