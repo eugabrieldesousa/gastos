@@ -1,6 +1,6 @@
 import {
-  debtSchema, financeSchema, localToday, saveExpense, shiftMonth,
-  type Debt, type ExpenseInput, type FinanceData,
+  debtCostSchema, debtSchema, financeSchema, localToday, parseMoney, saveExpense, shiftMonth,
+  type Debt, type DebtCost, type DebtInput, type ExpenseInput, type FinanceData,
 } from "./finance";
 
 /** Turn domain validation into readable messages while keeping the repository strict. */
@@ -10,10 +10,59 @@ export function validateFinance(data: FinanceData): FinanceData {
   return result.data;
 }
 
-export function saveDebt(data: FinanceData, input: Omit<Debt, "id">, id = crypto.randomUUID()): FinanceData {
-  const debt = debtSchema.parse({ ...input, id });
+export function saveDebt(data: FinanceData, input: DebtInput, id = crypto.randomUUID()): FinanceData {
+  const existing = data.debts.find((d) => d.id === id);
+  const type = input.type ?? existing?.type ?? "fixed";
+  if (existing && existing.type !== type) throw new Error("O tipo de uma dívida cadastrada não pode ser alterado.");
+  const costs = input.costs ?? existing?.costs ?? [];
+  const debt = debtSchema.parse({ ...input, id, type, costs,
+    originalCents: type === "itemized" ? costs.reduce((sum, cost) => sum + cost.amountCents, 0) : input.originalCents });
   return validateFinance({ ...data, debts: data.debts.some((d) => d.id === id)
     ? data.debts.map((d) => d.id === id ? debt : d) : [...data.debts, debt] });
+}
+
+function itemizedDebt(data: FinanceData, debtId: string) {
+  const debt = data.debts.find((d) => d.id === debtId);
+  if (!debt || debt.type !== "itemized") throw new Error("Selecione uma dívida por custos existente.");
+  return debt;
+}
+
+export function saveDebtCosts(data: FinanceData, debtId: string, inputs: Array<Omit<DebtCost, "id">>): FinanceData {
+  const debt = itemizedDebt(data, debtId);
+  if (!inputs.length) throw new Error("Adicione pelo menos um custo.");
+  const costs = inputs.map((input) => debtCostSchema.parse({ ...input, id: crypto.randomUUID() }));
+  return saveDebt(data, { ...debt, costs: [...debt.costs, ...costs] }, debtId);
+}
+
+export function updateDebtCost(data: FinanceData, debtId: string, costId: string, input: Omit<DebtCost, "id">): FinanceData {
+  const debt = itemizedDebt(data, debtId);
+  if (!debt.costs.some((cost) => cost.id === costId)) throw new Error("O custo não existe mais. Recarregue os dados.");
+  const cost = debtCostSchema.parse({ ...input, id: costId });
+  return saveDebt(data, { ...debt, costs: debt.costs.map((c) => c.id === costId ? cost : c) }, debtId);
+}
+
+export function removeDebtCost(data: FinanceData, debtId: string, costId: string): FinanceData {
+  const debt = itemizedDebt(data, debtId);
+  if (!debt.costs.some((cost) => cost.id === costId)) throw new Error("O custo não existe mais. Recarregue os dados.");
+  if (debt.costs.length === 1) throw new Error("A dívida precisa manter pelo menos um custo.");
+  return saveDebt(data, { ...debt, costs: debt.costs.filter((c) => c.id !== costId) }, debtId);
+}
+
+/** Parse the trailing BRL amount without splitting hyphens or notes in descriptions. */
+export function parseDebtCostList(value: string): Array<Omit<DebtCost, "id">> {
+  const costs: Array<Omit<DebtCost, "id">> = [];
+  const invalid: number[] = [];
+  value.split(/\r?\n/).forEach((line, index) => {
+    if (!line.trim()) return;
+    const match = line.trim().match(/^(.*?)\s+(?:R\$\s*)?((?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?)$/);
+    const description = match?.[1].trim() ?? "";
+    const amountCents = match ? parseMoney(match[2]) : null;
+    if (!description || description === "R$" || description.length > 120 || amountCents === null || amountCents <= 0) invalid.push(index + 1);
+    else costs.push({ description, amountCents });
+  });
+  if (invalid.length) throw new Error(`Revise as linhas ${invalid.join(", ")}: informe descrição e valor positivo em reais no final de cada linha.`);
+  if (!costs.length) throw new Error("Cole pelo menos uma linha com descrição e valor.");
+  return costs;
 }
 
 export function debtSummary(data: FinanceData, debt: Debt, today = localToday()) {

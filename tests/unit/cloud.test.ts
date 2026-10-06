@@ -6,6 +6,7 @@ import { RemoteFinanceRepository } from "../../src/lib/remote-repository";
 import { StorageConflictError } from "../../src/lib/repository";
 import { CloudStoreError } from "../../src/lib/cloud-store";
 import { financeSnapshotHash } from "../../src/lib/finance-snapshot";
+import { saveDebt } from "../../src/lib/debts";
 
 const origin = "https://gastos.example";
 const emptyHash = await financeSnapshotHash(emptyFinanceData());
@@ -27,6 +28,22 @@ function store(): CloudStore {
 }
 
 describe("API financeira autenticada", () => {
+  it("salva custos detalhados e recusa total divergente sem substituir o documento", async () => {
+    const db = store();
+    const api = financeApi(db, async () => "github:100");
+    const data = saveDebt(emptyFinanceData(), { name: "Reparos", creditor: "Pai", category: "Carro", type: "itemized", description: "Carro",
+      originalCents: 0, downPaymentCents: 0, historicalPaidCents: 0, startMonth: "2026-10",
+      costs: [{ id: crypto.randomUUID(), description: "Guincho", amountCents: 75000 }] });
+    const saved = await api(put({ data, expectedRevision: 0 }));
+    expect(saved.status).toBe(200);
+    const stored = await saved.json();
+    expect(stored.debts[0]).toMatchObject({ type: "itemized", originalCents: 75000, costs: data.debts[0].costs });
+    expect(stored.expenses).toEqual([]);
+    const invalid = { ...stored, debts: [{ ...stored.debts[0], originalCents: 1 }] };
+    expect((await api(put({ data: invalid, expectedRevision: 1, expectedSnapshotHash: await financeSnapshotHash(stored) }))).status).toBe(400);
+    expect(await db.read("github:100")).toEqual(stored);
+    expect(db.write).toHaveBeenCalledTimes(1);
+  });
   it("recusa visitantes sem ler ou gravar no banco", async () => {
     const db = store();
     const api = financeApi(db, async () => null);

@@ -147,6 +147,11 @@ export const expenseSchema = expenseV2Schema.extend({
   debtId: z.string().uuid().nullable().default(null),
 });
 
+export const debtCostSchema = z.object({
+  id: z.string().uuid(),
+  description: z.string().trim().min(1, "Informe a descrição do custo.").max(120),
+  amountCents: centsSchema.refine((v) => v > 0, "O custo deve ser maior que zero."),
+}).strict();
 export const debtSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(120),
@@ -156,7 +161,20 @@ export const debtSchema = z.object({
   downPaymentCents: centsSchema,
   historicalPaidCents: centsSchema,
   startMonth: monthSchema,
-}).strict();
+  type: z.enum(["fixed", "itemized"]).default("fixed"),
+  description: z.string().trim().max(1000).default(""),
+  costs: z.array(debtCostSchema).max(10000).default([]),
+}).strict().superRefine((debt, ctx) => {
+  const issue = (message: string) => ctx.addIssue({ code: "custom", message });
+  if (debt.type === "fixed" && debt.costs.length) issue("Dívidas de valor fixo não podem ter custos detalhados.");
+  if (debt.type === "itemized") {
+    if (!debt.costs.length) issue("Adicione pelo menos um custo à dívida.");
+    if (new Set(debt.costs.map((cost) => cost.id)).size !== debt.costs.length) issue("Custos duplicados.");
+    const total = debt.costs.reduce((sum, cost) => sum + cost.amountCents, 0);
+    if (!Number.isSafeInteger(total) || total > MAX_CENTS) issue("O total dos custos ultrapassa o limite permitido.");
+    if (debt.originalCents !== total) issue("O total da dívida deve ser igual à soma dos custos.");
+  }
+});
 const column = z.number().int().min(0).max(1000);
 export const columnMappingSchema = z.object({
   sheet: z.string().max(120),
@@ -333,7 +351,9 @@ export const financeSchema = financeV2Object.extend({
     if (!categories.has(debt.category)) issue("Categoria da dívida inexistente.");
     const paid = data.expenses.filter((e) => e.debtId === debt.id && e.status === "paid")
       .reduce((sum, e) => sum + e.amountCents, debt.downPaymentCents + debt.historicalPaidCents);
-    if (paid > debt.originalCents) issue("O pagamento ultrapassa o saldo da dívida.");
+    if (paid > debt.originalCents) issue(debt.type === "itemized"
+      ? "O total dos custos não pode ser menor que a entrada, o histórico e os pagamentos já registrados. Revise o saldo da dívida."
+      : "O pagamento ultrapassa o saldo da dívida.");
   }
   for (const expense of data.expenses) {
     if (expense.kind === "debt") {
@@ -363,6 +383,8 @@ export const financeSchema = financeV2Object.extend({
   }
 });
 export type Debt = z.infer<typeof debtSchema>;
+export type DebtInput = Omit<z.input<typeof debtSchema>, "id">;
+export type DebtCost = z.infer<typeof debtCostSchema>;
 export type BankSource = z.infer<typeof bankSourceSchema>;
 export type ColumnMapping = z.infer<typeof columnMappingSchema>;
 export type ImportRecord = z.infer<typeof importRecordSchema>;
