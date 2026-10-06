@@ -87,6 +87,29 @@ describe("API financeira autenticada", () => {
 });
 
 describe("repositório remoto", () => {
+  it("carrega a conta vazia e faz o primeiro salvamento com o fetch nativo", async () => {
+    const initial = emptyFinanceData();
+    const next = { ...initial, revision: 1, salaries: { "2026-10": 12345 } };
+    const fetcher = vi.fn(function (this: unknown, _input: Parameters<typeof fetch>[0], init?: RequestInit) {
+      // Browser fetch rejects a repository object as its receiver before sending a request.
+      if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
+      return Promise.resolve(Response.json(init?.method === "PUT" ? next : initial));
+    });
+    vi.stubGlobal("fetch", fetcher);
+    try {
+      const repo = new RemoteFinanceRepository();
+      expect(await repo.read()).toEqual(initial);
+      expect(await repo.write({ ...initial, salaries: next.salaries }, 0)).toEqual(next);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(fetcher.mock.calls[1][1]?.body as string)).toMatchObject({
+        data: { revision: 0, salaries: next.salaries },
+        expectedRevision: 0,
+        expectedSnapshotHash: emptyHash,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it("envia a revisão esperada e usa a confirmação do servidor", async () => {
     const data = { ...emptyFinanceData(), revision: 3 };
     const loaded = { ...data, revision: 7 };

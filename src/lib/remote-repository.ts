@@ -5,7 +5,8 @@ import { financeSnapshotHash } from "./finance-snapshot";
 export class RemoteFinanceRepository implements FinanceRepository {
   private loaded?: { revision: number; hash: string };
   private generation = 0;
-  constructor(private readonly fetcher: typeof fetch = fetch) {}
+  // Keep the native browser fetch attached to Window, rather than this repository.
+  constructor(private readonly fetcher: typeof fetch = (input, init) => fetch(input, init)) {}
 
   private async request(init?: RequestInit): Promise<FinanceData> {
     const generation = ++this.generation;
