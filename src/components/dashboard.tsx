@@ -461,10 +461,10 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
             {summary.transferred > 0 && <span className="summary-caption" data-testid="transferred-balance">
               {formatMoney(summary.transferred)} levados para {monthLabel(shiftMonth(month, 1))}.
             </span>}
-            {month && month < today.slice(0, 7) && (summary.transferred > 0 || (summary.remaining !== null && summary.remaining > 0)) && <Button
+            {month && month <= today.slice(0, 7) && month < "9999-12" && (summary.transferred > 0 || (summary.remaining !== null && summary.remaining > 0)) && <Button
               className="salary-edit transfer-button" variant="ghost" size="sm" disabled={disabled}
               onClick={() => { setReturnFocus(document.activeElement as HTMLElement); setTransferMonth(month); }}>
-              <ArrowUpRight size={13} />{summary.transferred > 0 ? "Editar transferência de sobra" : "Levar sobra para o próximo mês"}
+              <ArrowUpRight size={13} />{summary.transferred > 0 ? "Editar transferência de sobra" : month === today.slice(0, 7) ? "Simular próximo mês" : "Levar sobra para o próximo mês"}
             </Button>}
           </div>
         </section>
@@ -549,6 +549,7 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
         }} /> : null}
       {transferMonth && <BalanceTransferDialog key={transferMonth} month={transferMonth}
         available={monthSummary(data, transferMonth).remaining} existing={data.balanceTransfers[transferMonth] ?? 0}
+        nextSummary={monthSummary(data, shiftMonth(transferMonth, 1))}
         busy={busy} returnFocus={returnFocus} onClose={() => setTransferMonth(null)}
         onSave={(amount) => finance.commit((previous) => saveBalanceTransfer(previous, transferMonth, amount, today),
           amount === null ? "Transferência removida." : "Sobra confirmada para o próximo mês.")} />}

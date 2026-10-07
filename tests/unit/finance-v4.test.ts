@@ -42,9 +42,13 @@ describe("sobras confirmadas", () => {
   it.each([0, -1, 1.5, 32609, Number.NaN])("recusa valor inválido %s", (amount) => {
     expect(() => saveBalanceTransfer(fixture(), "2026-10", amount, today)).toThrow();
   });
-  it("recusa meses atuais, futuros e inválidos; passa dezembro para janeiro", () => {
-    for (const month of ["2026-12", "2027-01", "2026-13", "9999-12"]) expect(() => saveBalanceTransfer(fixture(), month, 1, today)).toThrow();
-    const data = saveBalanceTransfer({ ...emptyFinanceData(), salaries: { "2026-12": 50000, "2027-01": 0 } }, "2026-12", 50000, "2027-02-01");
+  it("permite levar a sobra do mês atual para simular o seguinte", () => {
+    const data = saveBalanceTransfer(fixture(), "2026-10", 32608, "2026-10-06");
+    expect(monthSummary(data, "2026-11")).toMatchObject({ received: 32608, remaining: 442608 });
+  });
+  it("recusa meses futuros e inválidos; passa dezembro atual para janeiro", () => {
+    for (const month of ["2027-01", "2026-13", "9999-12"]) expect(() => saveBalanceTransfer(fixture(), month, 1, today)).toThrow();
+    const data = saveBalanceTransfer({ ...emptyFinanceData(), salaries: { "2026-12": 50000, "2027-01": 0 } }, "2026-12", 50000, today);
     expect(monthSummary(data, "2027-01").remaining).toBe(50000);
   });
   it("migra v2 e v3 sem inventar transferências nem alterar valores", () => {

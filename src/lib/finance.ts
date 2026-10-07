@@ -616,8 +616,8 @@ export function monthSummary(data: FinanceData, month: string) {
 
 /** Confirmed transfers are independent of subsequent changes in the source month. */
 export function saveBalanceTransfer(data: FinanceData, month: string, amount: number | null, today = localToday()): FinanceData {
-  if (!monthSchema.safeParse(month).success || month >= "9999-12" || month >= today.slice(0, 7))
-    throw new Error("Selecione um mês anterior ao atual.");
+  if (!monthSchema.safeParse(month).success || month >= "9999-12" || month > today.slice(0, 7))
+    throw new Error("Selecione o mês atual ou um mês anterior.");
   const balanceTransfers = { ...data.balanceTransfers };
   if (amount === null) delete balanceTransfers[month];
   else {

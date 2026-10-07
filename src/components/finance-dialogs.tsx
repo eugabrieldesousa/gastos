@@ -30,12 +30,16 @@ function restoreFocus(target: HTMLElement | null) {
   )?.focus();
 }
 
-export function BalanceTransferDialog({ month, available, existing, onSave, onClose, busy, returnFocus }: BaseProps & {
+export function BalanceTransferDialog({ month, available, existing, nextSummary, onSave, onClose, busy, returnFocus }: BaseProps & {
   month: string; available: number | null; existing: number;
+  nextSummary: { salary: number | null; total: number; ownRemaining: number | null };
   onSave: (cents: number | null) => Promise<boolean>;
 }) {
   const [value, setValue] = useState(moneyInput(existing || Math.max(available ?? 0, 0)));
   const [error, setError] = useState<string | null>(null);
+  const cents = parseMoney(value);
+  const validAmount = cents !== null && cents > 0 && available !== null && cents <= available;
+  const projectedRemaining = validAmount && nextSummary.ownRemaining !== null ? nextSummary.ownRemaining + cents : null;
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cents = parseMoney(value);
@@ -52,7 +56,7 @@ export function BalanceTransferDialog({ month, available, existing, onSave, onCl
     }}>
       <DialogHeader>
         <div className="dialog-icon"><ArrowRightLeft size={22} /></div>
-        <DialogTitle>Levar sobra para o próximo mês</DialogTitle>
+        <DialogTitle>Simulação do próximo mês</DialogTitle>
         <DialogDescription>De {monthLabel(month)} para {monthLabel(shiftMonth(month, 1))}.</DialogDescription>
       </DialogHeader>
       <form onSubmit={submit} noValidate className="space-y-5 pt-2">
@@ -63,6 +67,16 @@ export function BalanceTransferDialog({ month, available, existing, onSave, onCl
             aria-invalid={Boolean(error)} aria-describedby={error ? "transfer-error" : "transfer-hint"} />
           <p id="transfer-hint" className="text-xs text-muted-foreground">Sobra disponível: {available === null ? "salário não informado" : formatMoney(available)}.</p>
           <p className="text-xs text-muted-foreground">O valor confirmado fica salvo. Alterar os gastos deste mês depois não muda a transferência.</p>
+        </div>
+        <div className="rounded-lg border bg-muted/30 p-4 space-y-3" aria-label="Previsão do próximo mês">
+          <p className="text-sm font-medium">Previsão para {monthLabel(shiftMonth(month, 1))}</p>
+          <dl className="space-y-2 text-sm">
+            <div className="flex justify-between gap-3"><dt>Salário cadastrado</dt><dd>{nextSummary.salary === null ? "Não informado" : formatMoney(nextSummary.salary)}</dd></div>
+            <div className="flex justify-between gap-3"><dt>Gastos pagos e previstos</dt><dd>{formatMoney(nextSummary.total)}</dd></div>
+            <div className="flex justify-between gap-3"><dt>Sobra a receber</dt><dd data-testid="simulation-received">{validAmount ? formatMoney(cents) : "—"}</dd></div>
+            <div className="flex justify-between gap-3 border-t pt-2 font-semibold"><dt>Sobra prevista</dt><dd data-testid="simulation-remaining">{projectedRemaining === null ? "—" : formatMoney(projectedRemaining)}</dd></div>
+          </dl>
+          <p className="text-xs text-muted-foreground">{nextSummary.salary === null ? "Informe o salário do próximo mês para calcular a sobra total. " : ""}Simulação com os gastos cadastrados; os valores podem mudar. Nada é salvo até confirmar a sobra.</p>
         </div>
         {error && <Alert variant="destructive"><AlertDescription id="transfer-error">{error}</AlertDescription></Alert>}
         <DialogFooter className="transfer-dialog-footer">

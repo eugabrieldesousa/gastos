@@ -10,8 +10,8 @@ function fixture() {
   return addExpense(data, { description: "Compra em andamento", amountCents: 10000, category: "Saúde", date: "2026-11-05", status: "planned", cardId: data.cards[0].id,
     kind: "installment", firstInstallment: 4, totalInstallments: 5 });
 }
-async function seed(page: Page, data = fixture()) {
-  await page.clock.setFixedTime(new Date("2026-12-05T15:00:00Z"));
+async function seed(page: Page, data = fixture(), today = "2026-12-05") {
+  await page.clock.setFixedTime(new Date(`${today}T15:00:00Z`));
   await page.addInitScript((value) => { if (!localStorage.getItem("mes.finance.v1")) localStorage.setItem("mes.finance.v1", JSON.stringify(value)); }, data);
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Adicionar gasto", exact: true })).toBeEnabled();
@@ -57,10 +57,12 @@ test("sobra opcional pode ser confirmada, editada, removida e exportada para IA"
   await page.getByLabel("Selecionar mês").fill("2026-10");
   await page.getByRole("button", { name: "Levar sobra para o próximo mês", exact: true }).click();
   await expect(page.getByLabel("Valor da sobra a transferir")).toHaveValue("400,00");
+  await expect(page.getByTestId("simulation-remaining")).toHaveText(/1\.000,00/);
   await page.getByLabel("Valor da sobra a transferir").fill("500,00");
   await page.getByRole("button", { name: "Confirmar sobra", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("não ultrapasse");
   await page.getByLabel("Valor da sobra a transferir").fill("250,00");
+  await expect(page.getByTestId("simulation-remaining")).toHaveText(/850,00/);
   await page.getByRole("button", { name: "Confirmar sobra", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect((await stored(page)).expenses).toHaveLength(5);
@@ -92,8 +94,44 @@ test("sobra opcional pode ser confirmada, editada, removida e exportada para IA"
   await page.getByLabel("Selecionar mês").fill("2026-11");
   await expect(page.getByTestId("received-balance")).toHaveCount(0);
   await expect(page.getByTestId("remaining-total")).toHaveText(/600,00/);
-  await page.getByLabel("Selecionar mês").fill("2026-12");
+  await page.getByLabel("Selecionar mês").fill("2027-01");
   await expect(page.getByRole("button", { name: "Levar sobra para o próximo mês", exact: true })).toHaveCount(0);
+});
+
+test("simula a sobra do mês atual sem salvar até confirmar e substitui a transferência ao editar", async ({ page }) => {
+  await seed(page, fixture(), "2026-10-06");
+  await page.getByLabel("Selecionar mês").fill("2026-10");
+  await page.getByRole("button", { name: "Simular próximo mês", exact: true }).click();
+  await expect(page.getByTestId("simulation-remaining")).toHaveText(/1\.000,00/);
+  await page.getByLabel("Valor da sobra a transferir").fill("250,00");
+  await expect(page.getByTestId("simulation-remaining")).toHaveText(/850,00/);
+  expect((await stored(page)).balanceTransfers).toEqual({});
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await page.getByLabel("Selecionar mês").fill("2026-11");
+  await expect(page.getByTestId("remaining-total")).toHaveText(/600,00/);
+  await expect(page.getByRole("button", { name: "Simular próximo mês", exact: true })).toHaveCount(0);
+  await page.getByLabel("Selecionar mês").fill("2026-10");
+  await page.getByRole("button", { name: "Simular próximo mês", exact: true }).click();
+  await page.getByRole("button", { name: "Confirmar sobra", exact: true }).click();
+  await page.getByRole("button", { name: "Editar transferência de sobra", exact: true }).click();
+  await expect(page.getByTestId("simulation-remaining")).toHaveText(/1\.000,00/);
+  await page.getByLabel("Valor da sobra a transferir").fill("250,00");
+  await expect(page.getByTestId("simulation-remaining")).toHaveText(/850,00/);
+  await page.getByRole("button", { name: "Confirmar sobra", exact: true }).click();
+  await page.getByLabel("Selecionar mês").fill("2026-11");
+  await expect(page.getByTestId("remaining-total")).toHaveText(/850,00/);
+});
+
+test("simulação informa o salário ausente e mostra a sobra a receber separadamente", async ({ page }) => {
+  const data = fixture();
+  delete data.salaries["2026-11"];
+  await seed(page, data, "2026-10-06");
+  await page.getByLabel("Selecionar mês").fill("2026-10");
+  await page.getByRole("button", { name: "Simular próximo mês", exact: true }).click();
+  await expect(page.getByTestId("simulation-remaining")).toHaveText("—");
+  await expect(page.getByTestId("simulation-received")).toHaveText(/400,00/);
+  await expect(page.getByRole("dialog")).toContainText("Informe o salário do próximo mês");
+  expect((await stored(page)).balanceTransfers).toEqual({});
 });
 
 test("parcela 4/5 mostra 80% com histórico e parcela atual, nos dois temas e tamanhos", async ({ page }, testInfo) => {
