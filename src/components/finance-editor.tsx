@@ -372,8 +372,9 @@ export function ExpenseEditor({
         <Field label="Dívida" id="expense-debt" hint="Cadastre a dívida na seção Dívidas. Este pagamento reduz o saldo e entra nos gastos do mês.">
           <NativeSelect id="expense-debt" name="debtId" defaultValue={expense?.debtId ?? ""} required>
             <option value="">Selecione a dívida</option>
-            {data.debts.map((debt) => <option key={debt.id} value={debt.id}>{debt.name} · {debt.creditor}</option>)}
+            {data.debts.filter((debt) => debt.type !== "installment").map((debt) => <option key={debt.id} value={debt.id}>{debt.name} · {debt.creditor}</option>)}
           </NativeSelect>
+          <p className="field-hint">Para um parcelamento combinado, use Pagar parcela na seção Dívidas ou nas ações do gasto previsto.</p>
         </Field>
       ) : null}
       {cardId && !expense ? (

@@ -183,6 +183,23 @@ describe("revisão, identidade e persistência", () => {
     expect(data.importRecords[0].expenseId).toBe(id);
     expect(debtSummary(data, data.debts[0], "2026-10-05").remaining).toBe(90000);
   });
+  it("vincula parcela de outro mês sem duplicar, exigindo valor integral e seleção explícita", () => {
+    const data = saveDebt(create(), { name: "Acordo", creditor: "Pai", category: "Carro", type: "installment", originalCents: 600000,
+      downPaymentCents: 0, historicalPaidCents: 0, startMonth: "2026-10", schedule: { count: 12, paidCount: 0, firstDueDate: "2026-10-10" } });
+    const target = data.expenses[1];
+    const transaction = { ...row, description: "Pix pai", signedAmountCents: -50000 };
+    const payment: ImportChoice = { row: transaction, action: "debt", debtId: data.debts[0].id, targetId: target.id };
+    expect(() => applyImport(data, batch(data), [{ ...payment, targetId: undefined }])).toThrow("parcela existente");
+    expect(() => applyImport(data, batch(data), [{ ...payment, row: { ...transaction, signedAmountCents: -49999 } }])).toThrow("integral");
+    const next = applyImport(data, batch(data), [payment]);
+    expect(next.expenses).toHaveLength(12);
+    expect(next.expenses[1]).toMatchObject({ id: target.id, status: "paid", date: transaction.date, dueDate: "2026-11-10" });
+    expect(monthSummary(next, "2026-09").paid).toBe(50000);
+    expect(monthSummary(next, "2026-11").total).toBe(0);
+    expect(next.importRecords[0].expenseId).toBe(target.id);
+    expect(() => applyImport(next, batch(next, secondHash), [{ ...payment, row: { ...transaction, externalId: "other" } }])).toThrow("outra transação");
+    expect(data.expenses[1].status).toBe("planned");
+  });
   it("bloqueia entradas, transferências e lotes parcialmente inválidos", () => {
     const data = create();
     expect(() => applyImport(data, batch(data), [choice, { ...choice, row: { ...row, row: 2, externalId: "credit", signedAmountCents: 1, hint: "credit" } }])).toThrow("saídas");

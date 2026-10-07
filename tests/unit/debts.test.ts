@@ -150,10 +150,10 @@ describe("dívidas por custos", () => {
   });
   it("lê dívidas v3 antigas como valor fixo sem alterar pagamentos ou valores", () => {
     const data = create();
-    const { type: _type, costs: _costs, description: _description, ...old } = data.debts[0];
-    void _type; void _costs; void _description;
+    const { type: _type, costs: _costs, description: _description, installmentPlanId: _plan, ...old } = data.debts[0];
+    void _type; void _costs; void _description; void _plan;
     const migrated = parseBackup(JSON.stringify({ ...data, debts: [old] }));
-    expect(migrated.debts[0]).toEqual({ ...old, type: "fixed", description: "", costs: [] });
+    expect(migrated.debts[0]).toEqual({ ...old, type: "fixed", description: "", costs: [], installmentPlanId: null });
     expect(migrated.version).toBe(3);
     expect(migrated.expenses).toEqual(data.expenses);
     expect(debtSummary(migrated, migrated.debts[0], today)).toEqual(debtSummary(data, data.debts[0], today));

@@ -28,6 +28,20 @@ function store(): CloudStore {
 }
 
 describe("API financeira autenticada", () => {
+  it("salva combinado completo e recusa perda de parcela na API", async () => {
+    const db = store();
+    const api = financeApi(db, async () => "github:100");
+    const data = saveDebt(emptyFinanceData(), { name: "Acordo", creditor: "Pai", category: "Carro", type: "installment", originalCents: 600000,
+      downPaymentCents: 0, historicalPaidCents: 0, startMonth: "2026-10", schedule: { count: 12, paidCount: 3, firstDueDate: "2026-10-10" } });
+    const response = await api(put({ data, expectedRevision: 0 }));
+    expect(response.status).toBe(200);
+    const saved = await response.json();
+    expect(saved.expenses).toHaveLength(9);
+    expect(saved.debts[0]).toMatchObject({ originalCents: 600000, historicalPaidCents: 150000 });
+    const invalid = { ...saved, expenses: saved.expenses.slice(1) };
+    expect((await api(put({ data: invalid, expectedRevision: 1, expectedSnapshotHash: await financeSnapshotHash(saved) }))).status).toBe(400);
+    expect(await db.read("github:100")).toEqual(saved);
+  });
   it("salva custos detalhados e recusa total divergente sem substituir o documento", async () => {
     const db = store();
     const api = financeApi(db, async () => "github:100");

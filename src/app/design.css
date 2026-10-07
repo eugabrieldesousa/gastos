@@ -1539,6 +1539,9 @@ select:focus-visible {
 .debt-cost-row > span { overflow-wrap: anywhere; white-space: pre-wrap; }
 .debt-cost-row > strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .debt-cost-actions { display: flex; gap: 2px; }
+.debt-expand-icon[data-expanded="true"] { transform: rotate(180deg); }
+.debt-installment-row > .debt-installment-actions { flex: 0 0 auto; flex-direction: row; flex-wrap: wrap; }
+.installment-payment-value { font-size: 13px; line-height: 1.8; }
 .debt-cost-editor, .cost-editor-rows, .cost-list-preview, .cost-paste-panel { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .cost-editor-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap: 8px; align-items: end; }
 .cost-editor-row .form-field label { font-size: 11px; }
@@ -1594,6 +1597,8 @@ select:focus-visible {
   .debt-cost-list { padding: 10px; }
   .debt-cost-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
   .debt-cost-actions { grid-column: 2; justify-content: flex-end; }
+  .debt-installment-row { flex-wrap: wrap; }
+  .debt-installment-row > .debt-installment-actions { flex-basis: 100%; justify-content: flex-end; }
   .cost-editor-row { grid-template-columns: minmax(0, 1fr) auto; }
   .cost-editor-row > .form-field:first-child { grid-column: 1 / -1; }
   .cost-total { flex-wrap: wrap; }

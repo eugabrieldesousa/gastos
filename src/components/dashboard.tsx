@@ -65,7 +65,8 @@ import {
 import { CategoryMark, ExpenseList } from "@/components/expense-list";
 import { FinanceChart } from "@/components/finance-chart";
 import { useFinance } from "@/hooks/use-finance";
-import { saveDebtPayment } from "@/lib/debts";
+import { saveDebtPayment, setDebtInstallmentPayment } from "@/lib/debts";
+const DebtInstallmentPaymentEditor = dynamic(() => import("@/components/debt-installment-payment-editor").then((module) => module.DebtInstallmentPaymentEditor));
 const DebtsPanel = dynamic(() => import("@/components/debts-panel").then((module) => module.DebtsPanel));
 const ImportsPanel = dynamic(() => import("@/components/imports-panel").then((module) => module.ImportsPanel));
 import {
@@ -121,6 +122,7 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
     expense: Expense | null;
     cardId?: string;
   } | null>(null);
+  const [installmentPayment, setInstallmentPayment] = useState<Expense | null>(null);
   const [categoryForm, setCategoryForm] = useState<{
     category: Category | null;
   } | null>(null);
@@ -227,6 +229,7 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
           )
         : (document.activeElement as HTMLElement),
     );
+    if (expense?.kind === "installment" && expense.debtId) { setInstallmentPayment(expense); return; }
     setExpenseForm({ expense, cardId });
   }
   function selectCategory(name: string) {
@@ -281,6 +284,11 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
       setDeleting(expense);
     },
     onToggle: (expense: Expense) => {
+      if (expense.kind === "installment" && expense.debtId) {
+        if (expense.status === "planned") openExpense(expense);
+        else void finance.commit((prev) => setDebtInstallmentPayment(prev, expense.id, null, today), "Pagamento desfeito.");
+        return;
+      }
       void finance.commit(
         (prev) =>
           saveExpense(
@@ -1209,6 +1217,14 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
           }
         />
       ) : null}
+      {installmentPayment && data.debts.find((d) => d.id === installmentPayment.debtId) ? <DebtInstallmentPaymentEditor
+        data={data} debt={data.debts.find((d) => d.id === installmentPayment.debtId)!} today={today} installment={installmentPayment}
+        busy={busy} saveError={error} returnFocus={returnFocus} onClose={() => setInstallmentPayment(null)}
+        onSave={async (id, date) => {
+          const saved = await finance.commit((prev) => setDebtInstallmentPayment(prev, id, date, today), "Parcela paga.");
+          if (saved && date.slice(0, 7) !== month) changeMonth(date.slice(0, 7));
+          return saved;
+        }} /> : null}
       {expenseForm ? (
         <ExpenseEditor
           saveError={error}

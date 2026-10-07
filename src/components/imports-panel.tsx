@@ -79,7 +79,10 @@ function ReviewRow({ data, source, choice, fileHash, invoiceMonth, duplicateInFi
   const handled = Boolean(info.known && info.known.action !== "ignore");
   const requiresConfirmation = info.possibleDuplicate || (duplicateInFile && !row.externalId);
   const outgoing = !row.error && row.signedAmountCents !== null && row.signedAmountCents < 0;
-  const candidates = choice.action === "debt" ? info.candidates.filter((e) => !e.seriesId && (!e.debtId || e.debtId === choice.debtId)) : info.candidates;
+  const installmentDebt = choice.action === "debt" && data.debts.find((d) => d.id === choice.debtId)?.type === "installment";
+  const candidates = installmentDebt ? data.expenses.filter((e) => e.kind === "installment" && e.debtId === choice.debtId && e.amountCents === Math.abs(row.signedAmountCents ?? 0)
+    && !data.importRecords.some((r) => r.expenseId === e.id && r.action !== "ignore"))
+    : choice.action === "debt" ? info.candidates.filter((e) => !e.seriesId && (!e.debtId || e.debtId === choice.debtId)) : info.candidates;
   const label = row.error ?? (handled ? "Já registrada; a identidade foi preservada." : info.known?.action === "ignore" ? "Ignorada anteriormente; você pode rever a decisão."
     : duplicateInFile && row.externalId ? "O identificador se repete neste arquivo. Escolha uma ocorrência e deixe as outras sem alterar."
       : requiresConfirmation ? "Possível duplicidade: vincule um gasto ou confirme que é outra transação."
@@ -99,10 +102,10 @@ function ReviewRow({ data, source, choice, fileHash, invoiceMonth, duplicateInFi
       </NativeSelect></Field>
       {choice.action === "create" || choice.action === "link" ? <Field label="Categoria" id={`row-category-${row.row}`}><NativeSelect id={`row-category-${row.row}`} value={choice.category ?? info.category} disabled={disabled} onChange={(e) => set({ category: e.target.value })}>{data.categories.filter((c) => !c.archived || c.name === choice.category).map((c) => <option key={c.id}>{c.name}</option>)}</NativeSelect></Field> : null}
       {choice.action === "debt" ? <Field label="Dívida" id={`row-debt-${row.row}`}><NativeSelect id={`row-debt-${row.row}`} value={choice.debtId ?? ""} disabled={disabled} onChange={(e) => set({ debtId: e.target.value, targetId: undefined })}><option value="">Selecione a dívida</option>{data.debts.map((d) => <option key={d.id} value={d.id}>{d.name} · {d.creditor}</option>)}</NativeSelect></Field> : null}
-      {choice.action === "link" || choice.action === "debt" ? <Field label="Gasto existente" id={`row-target-${row.row}`}><NativeSelect id={`row-target-${row.row}`} value={choice.targetId ?? ""} disabled={disabled} onChange={(e) => {
+      {choice.action === "link" || choice.action === "debt" ? <Field label={installmentDebt ? "Parcela do combinado" : "Gasto existente"} id={`row-target-${row.row}`} hint={installmentDebt ? "Selecione uma parcela de valor integral igual à movimentação. O vencimento pode ser de outro mês." : undefined}><NativeSelect id={`row-target-${row.row}`} value={choice.targetId ?? ""} disabled={disabled} onChange={(e) => {
         const existing = candidates.find((c) => c.id === e.target.value);
         set({ targetId: e.target.value || undefined, category: existing?.category ?? choice.category });
-      }}><option value="">{choice.action === "debt" ? "Criar novo pagamento" : "Selecione o gasto"}</option>{candidates.map((e) => <option key={e.id} value={e.id}>{e.date} · {e.description} · {formatMoney(e.amountCents)}{e.installmentNumber ? ` · Parcela ${e.installmentNumber}/${e.installmentCount}` : ""}</option>)}</NativeSelect></Field> : null}
+      }}><option value="">{installmentDebt ? "Selecione a parcela" : choice.action === "debt" ? "Criar novo pagamento" : "Selecione o gasto"}</option>{candidates.map((e) => <option key={e.id} value={e.id}>{e.dueDate ?? e.date} · {e.description} · {formatMoney(e.amountCents)}{e.installmentNumber ? ` · Parcela ${e.installmentNumber}/${e.installmentCount}` : ""}</option>)}</NativeSelect></Field> : null}
       {choice.action === "invoice" ? <>
         <Field label="Cartão da fatura paga" id={`row-invoice-card-${row.row}`}><NativeSelect id={`row-invoice-card-${row.row}`} value={choice.invoiceCardId ?? ""} disabled={disabled} onChange={(e) => set({ invoiceCardId: e.target.value })}><option value="">Selecione o cartão</option>{data.cards.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</NativeSelect></Field>
         <Field label="Mês da fatura paga" id={`row-invoice-month-${row.row}`}><Input id={`row-invoice-month-${row.row}`} type="month" min="1000-01" max="9999-12" value={choice.invoiceMonth ?? ""} disabled={disabled} onChange={(e) => set({ invoiceMonth: e.target.value })} /></Field>

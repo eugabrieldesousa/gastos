@@ -1,5 +1,5 @@
 import {
-  debtCostSchema, debtSchema, financeSchema, localToday, parseMoney, saveExpense, shiftMonth,
+  dateInMonth, debtCostSchema, debtSchema, financeSchema, installmentAmount, isValidDate, localToday, parseMoney, saveExpense, shiftMonth,
   type Debt, type DebtCost, type DebtInput, type ExpenseInput, type FinanceData,
 } from "./finance";
 
@@ -10,15 +10,78 @@ export function validateFinance(data: FinanceData): FinanceData {
   return result.data;
 }
 
-export function saveDebt(data: FinanceData, input: DebtInput, id = crypto.randomUUID()): FinanceData {
+export type DebtSaveInput = DebtInput & { schedule?: { count: number; paidCount: number; firstDueDate: string } };
+
+export function saveDebt(data: FinanceData, input: DebtSaveInput, id = crypto.randomUUID()): FinanceData {
   const existing = data.debts.find((d) => d.id === id);
   const type = input.type ?? existing?.type ?? "fixed";
   if (existing && existing.type !== type) throw new Error("O tipo de uma dívida cadastrada não pode ser alterado.");
+  if (type === "installment" && !existing) return createInstallmentDebt(data, input, id);
+  if (existing?.type === "installment" && (input.originalCents !== existing.originalCents || input.startMonth !== existing.startMonth
+    || input.downPaymentCents !== existing.downPaymentCents || input.historicalPaidCents !== existing.historicalPaidCents
+    || (input.installmentPlanId !== undefined && input.installmentPlanId !== existing.installmentPlanId) || input.schedule))
+    throw new Error("O valor, o histórico e o calendário do combinado são definidos no cadastro.");
   const costs = input.costs ?? existing?.costs ?? [];
-  const debt = debtSchema.parse({ ...input, id, type, costs,
+  const { schedule: _schedule, ...fields } = input;
+  void _schedule;
+  const debt = debtSchema.parse({ ...fields, id, type, costs, installmentPlanId: input.installmentPlanId ?? existing?.installmentPlanId ?? null,
     originalCents: type === "itemized" ? costs.reduce((sum, cost) => sum + cost.amountCents, 0) : input.originalCents });
-  return validateFinance({ ...data, debts: data.debts.some((d) => d.id === id)
+  return validateFinance({ ...data, expenses: type === "installment" ? data.expenses.map((e) => e.debtId === id
+    ? { ...e, category: debt.category, description: installmentDescription(debt.name, e.installmentNumber!, e.installmentCount!) } : e) : data.expenses,
+    debts: data.debts.some((d) => d.id === id)
     ? data.debts.map((d) => d.id === id ? debt : d) : [...data.debts, debt] });
+}
+
+const installmentDescription = (name: string, number: number, count: number) => `Parcela ${number}/${count} · ${name}`.slice(0, 120);
+
+function createInstallmentDebt(data: FinanceData, input: DebtSaveInput, id: string): FinanceData {
+  const schedule = input.schedule;
+  if (!schedule || !Number.isInteger(schedule.count) || schedule.count < 2 || schedule.count > 360)
+    throw new Error("Informe entre 2 e 360 parcelas.");
+  const { count, paidCount, firstDueDate } = schedule;
+  if (!Number.isInteger(paidCount) || paidCount < 0 || paidCount >= count) throw new Error("Informe quantas parcelas já pagou, mantendo pelo menos uma parcela restante.");
+  if (!isValidDate(firstDueDate)) throw new Error("Informe um primeiro vencimento válido.");
+  if (!Number.isSafeInteger(input.originalCents) || input.originalCents < count) throw new Error("O total deve permitir pelo menos um centavo por parcela.");
+  const firstMonth = firstDueDate.slice(0, 7);
+  const [year, month] = firstMonth.split("-").map(Number);
+  if (count - paidCount - 1 > (9999 - year) * 12 + 12 - month) throw new Error("O último vencimento deve ocorrer até dezembro de 9999.");
+  const planId = crypto.randomUUID();
+  const { schedule: _schedule, ...fields } = input;
+  void _schedule;
+  const historicalPaidCents = Math.floor(input.originalCents / count) * paidCount + Math.min(input.originalCents % count, paidCount);
+  const debt = debtSchema.parse({ ...fields, id, type: "installment", installmentPlanId: planId, costs: [],
+    startMonth: firstMonth, downPaymentCents: 0, historicalPaidCents });
+  const expenses = Array.from({ length: count - paidCount }, (_, offset) => {
+    const number = paidCount + offset + 1;
+    const dueDate = dateInMonth(shiftMonth(firstMonth, offset), Number(firstDueDate.slice(8)));
+    return { id: crypto.randomUUID(), description: installmentDescription(debt.name, number, count), amountCents: installmentAmount(debt.originalCents, count, number),
+      category: debt.category, date: dueDate, dueDate, status: "planned" as const, kind: "installment" as const,
+      debtId: id, seriesId: planId, installmentNumber: number, installmentCount: count, cardId: null, purchaseDate: null };
+  });
+  return validateFinance({ ...data, debts: [...data.debts, debt], expenses: [...data.expenses, ...expenses],
+    installments: [...data.installments, { id: planId, totalInstallments: count, firstInstallment: paidCount + 1, firstMonth }] });
+}
+
+export function debtInstallmentSummary(data: FinanceData, debt: Debt) {
+  const plan = data.installments.find((p) => p.id === debt.installmentPlanId);
+  if (!plan) throw new Error("Parcelamento da dívida inexistente.");
+  const items = data.expenses.filter((e) => e.debtId === debt.id).sort((a, b) => a.installmentNumber! - b.installmentNumber!);
+  const pending = items.filter((e) => e.status === "planned");
+  return { plan, items, pending, historicalCount: plan.firstInstallment - 1,
+    paidCount: plan.firstInstallment - 1 + items.filter((e) => e.status === "paid").length,
+    nextDueDate: pending[0]?.dueDate ?? null, lastDueDate: items.at(-1)!.dueDate!,
+    firstAmount: installmentAmount(debt.originalCents, plan.totalInstallments, 1),
+    lastAmount: installmentAmount(debt.originalCents, plan.totalInstallments, plan.totalInstallments) };
+}
+
+export function setDebtInstallmentPayment(data: FinanceData, expenseId: string, date: string | null, today = localToday()): FinanceData {
+  const item = data.expenses.find((e) => e.id === expenseId);
+  const debt = data.debts.find((d) => d.id === item?.debtId);
+  if (!item || item.kind !== "installment" || debt?.type !== "installment" || !item.dueDate)
+    throw new Error("Selecione uma parcela do combinado existente.");
+  if (date !== null && (!isValidDate(date) || date > today)) throw new Error("Informe a data real do pagamento, sem data futura.");
+  return validateFinance({ ...data, expenses: data.expenses.map((e) => e.id === expenseId
+    ? { ...e, status: date === null ? "planned" : "paid", date: date ?? e.dueDate! } : e) });
 }
 
 function itemizedDebt(data: FinanceData, debtId: string) {
@@ -90,6 +153,11 @@ export function saveDebtPayment(data: FinanceData, debtId: string, input: Expens
   if (input.date > today) throw new Error("O pagamento real não pode ter uma data futura.");
   const existing = expenseId ? data.expenses.find((e) => e.id === expenseId) : undefined;
   if (expenseId && !existing) throw new Error("O gasto selecionado não existe mais. Revise o pagamento.");
+  if (debt.type === "installment") {
+    if (!existing || existing.debtId !== debtId || existing.kind !== "installment") throw new Error("Selecione a parcela existente deste combinado.");
+    if (input.amountCents !== existing.amountCents) throw new Error("O pagamento deve corresponder ao valor integral da parcela.");
+    return setDebtInstallmentPayment(data, existing.id, input.date, today);
+  }
   if (existing && (existing.cardId || existing.seriesId || (existing.debtId && existing.debtId !== debtId)))
     throw new Error("Selecione um gasto direto, avulso ou desta dívida.");
   return validateFinance(saveExpense(data, {

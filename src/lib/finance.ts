@@ -145,6 +145,7 @@ const expenseV2Schema = z
 export const expenseSchema = expenseV2Schema.extend({
   kind: z.enum(["single", "fixed", "installment", "debt"]).default("single"),
   debtId: z.string().uuid().nullable().default(null),
+  dueDate: z.string().refine(isValidDate).nullable().default(null),
 });
 
 export const debtCostSchema = z.object({
@@ -161,12 +162,15 @@ export const debtSchema = z.object({
   downPaymentCents: centsSchema,
   historicalPaidCents: centsSchema,
   startMonth: monthSchema,
-  type: z.enum(["fixed", "itemized"]).default("fixed"),
+  type: z.enum(["fixed", "itemized", "installment"]).default("fixed"),
+  installmentPlanId: z.string().uuid().nullable().default(null),
   description: z.string().trim().max(1000).default(""),
   costs: z.array(debtCostSchema).max(10000).default([]),
 }).strict().superRefine((debt, ctx) => {
   const issue = (message: string) => ctx.addIssue({ code: "custom", message });
-  if (debt.type === "fixed" && debt.costs.length) issue("Dívidas de valor fixo não podem ter custos detalhados.");
+  if (debt.type !== "itemized" && debt.costs.length) issue("Somente dívidas por custos podem ter custos detalhados.");
+  if (debt.type === "installment" ? !debt.installmentPlanId : debt.installmentPlanId !== null)
+    issue("Vínculo do parcelamento da dívida inválido.");
   if (debt.type === "itemized") {
     if (!debt.costs.length) issue("Adicione pelo menos um custo à dívida.");
     if (new Set(debt.costs.map((cost) => cost.id)).size !== debt.costs.length) issue("Custos duplicados.");
@@ -346,6 +350,8 @@ export const financeSchema = financeV2Object.extend({
     if (new Set(list.map((v) => v.id)).size !== list.length) issue("Registros duplicados.");
   }
   const debts = new Map(data.debts.map((d) => [d.id, d]));
+  const debtPlans = new Map(data.debts.filter((d) => d.installmentPlanId).map((d) => [d.installmentPlanId, d]));
+  if (debtPlans.size !== data.debts.filter((d) => d.installmentPlanId).length) issue("Um parcelamento não pode pertencer a duas dívidas.");
   const categories = new Set(data.categories.map((c) => c.name));
   for (const debt of data.debts) {
     if (!categories.has(debt.category)) issue("Categoria da dívida inexistente.");
@@ -354,15 +360,45 @@ export const financeSchema = financeV2Object.extend({
     if (paid > debt.originalCents) issue(debt.type === "itemized"
       ? "O total dos custos não pode ser menor que a entrada, o histórico e os pagamentos já registrados. Revise o saldo da dívida."
       : "O pagamento ultrapassa o saldo da dívida.");
+    if (debt.type === "installment") {
+      const plan = data.installments.find((p) => p.id === debt.installmentPlanId);
+      if (!plan) { issue("Parcelamento da dívida inexistente."); continue; }
+      const items = data.expenses.filter((e) => e.seriesId === plan.id);
+      const historical = Math.floor(debt.originalCents / plan.totalInstallments) * (plan.firstInstallment - 1)
+        + Math.min(debt.originalCents % plan.totalInstallments, plan.firstInstallment - 1);
+      if (debt.originalCents < plan.totalInstallments || debt.downPaymentCents !== 0 || debt.historicalPaidCents !== historical || debt.startMonth !== plan.firstMonth)
+        issue("Total ou histórico do parcelamento combinado inválido.");
+      if (items.length !== plan.totalInstallments - plan.firstInstallment + 1) issue("O parcelamento deve manter todas as parcelas restantes.");
+      const first = items.find((e) => e.installmentNumber === plan.firstInstallment);
+      if (!first?.dueDate || first.dueDate.slice(0, 7) !== plan.firstMonth) issue("Primeiro vencimento da dívida inválido.");
+      for (const item of items) {
+        const number = item.installmentNumber ?? 0;
+        const amount = installmentAmount(debt.originalCents, plan.totalInstallments, number);
+        const monthOffset = number - plan.firstInstallment;
+        const [year, month] = plan.firstMonth.split("-").map(Number);
+        const validMonth = monthOffset >= 0 && monthOffset <= (9999 - year) * 12 + 12 - month;
+        const expectedDue = first?.dueDate && validMonth
+          ? dateInMonth(shiftMonth(plan.firstMonth, monthOffset), Number(first.dueDate.slice(8))) : null;
+        if (item.kind !== "installment" || item.debtId !== debt.id || item.cardId || item.category !== debt.category || item.amountCents !== amount || item.dueDate !== expectedDue
+          || (item.status === "planned" && item.date !== item.dueDate)) issue("Parcela do combinado inválida. Preserve o valor e o vencimento original.");
+      }
+    }
   }
   for (const expense of data.expenses) {
     if (expense.kind === "debt") {
       const debt = expense.debtId ? debts.get(expense.debtId) : undefined;
-      if (!debt) issue("Selecione uma dívida existente.");
+      if (!debt || debt.type === "installment") issue("Selecione uma dívida de pagamentos variáveis; para um combinado, selecione a parcela.");
       if (expense.cardId || expense.seriesId || expense.installmentCount || expense.installmentNumber || expense.status !== "paid")
         issue("Pagamentos de dívida devem ser pagos diretamente, sem parcelamento ou cartão.");
       if (debt && expense.date.slice(0, 7) < debt.startMonth) issue("O pagamento é anterior ao início do acompanhamento da dívida.");
-    } else if (expense.debtId) issue("Somente pagamentos de dívida podem ter vínculo com uma dívida.");
+    } else if (expense.debtId) {
+      const debt = debts.get(expense.debtId);
+      if (expense.kind !== "installment" || debt?.type !== "installment" || debt.installmentPlanId !== expense.seriesId)
+        issue("Vínculo da parcela com a dívida inválido.");
+    }
+    if (expense.seriesId && debtPlans.has(expense.seriesId) && expense.debtId !== debtPlans.get(expense.seriesId)?.id)
+      issue("A parcela deve permanecer vinculada à dívida.");
+    if (expense.dueDate && !(expense.kind === "installment" && expense.debtId)) issue("Vencimento preservado permitido apenas em parcelas de dívida.");
   }
   const sources = new Map(data.bankSources.map((s) => [s.id, s]));
   if (new Set(data.bankSources.map((s) => `${s.bank}:${s.kind}:${s.name.toLocaleLowerCase("pt-BR")}`)).size !== data.bankSources.length)
@@ -467,6 +503,10 @@ export function shiftMonth(month: string, offset: number): string {
   return date.toISOString().slice(0, 7);
 }
 
+export function installmentAmount(totalCents: number, count: number, number: number): number {
+  return Math.floor(totalCents / count) + (number <= totalCents % count ? 1 : 0);
+}
+
 export function monthLabel(month: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
     month: "long",
@@ -567,6 +607,8 @@ export function saveExpense(
   input: ExpenseInput,
   id: string = crypto.randomUUID(),
 ): FinanceData {
+  if ((input.kind === "installment" && input.debtId) || data.expenses.some((e) => e.id === id && e.kind === "installment" && e.debtId))
+    throw new Error("Use as ações de pagamento da parcela para alterar este combinado.");
   const expense = expenseSchema.parse({ ...input, id });
   assertEditable(data, [expense, ...data.expenses.filter((e) => e.id === id)]);
   const exists = data.expenses.some((item) => item.id === id);
@@ -839,6 +881,7 @@ export function editOccurrence(
   input: ExpenseInput,
   scope: "one" | "future",
 ): FinanceData {
+  if (expense.kind === "installment" && expense.debtId) throw new Error("Use as ações de pagamento da parcela para alterar este combinado.");
   assertEditable(data, [expense]);
   if (!expense.seriesId || scope === "one") {
     if (expense.seriesId && input.date.slice(0, 7) !== expense.date.slice(0, 7))
@@ -922,6 +965,7 @@ export function removeOccurrence(
   expense: Expense,
   scope: "one" | "future",
 ): FinanceData {
+  if (expense.kind === "installment" && expense.debtId) throw new Error("A parcela faz parte de um combinado. Desfaça o pagamento para mantê-la prevista.");
   const month = expense.date.slice(0, 7);
   assertEditable(data, [expense]);
   if (!expense.seriesId)
@@ -1033,6 +1077,7 @@ export function saveCard(
 
 export function installmentSummaries(data: FinanceData, month: string) {
   return data.installments.flatMap((plan) => {
+    if (data.debts.some((debt) => debt.installmentPlanId === plan.id)) return [];
     const items = data.expenses
       .filter((e) => e.seriesId === plan.id)
       .map((e) =>

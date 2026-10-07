@@ -140,6 +140,7 @@ export function ExpenseList({
                   ? `${expense.installmentNumber}/${expense.installmentCount}`
                   : KIND_LABELS[expense.kind]}
                 {expense.cardId ? " · Cartão" : ""}
+                {expense.kind === "installment" && expense.debtId ? " · Combinado" : ""}
               </small>
             </div>
           </div>
@@ -188,17 +189,17 @@ export function ExpenseList({
                   )}
                 >
                   <Pencil />
-                  Editar gasto
+                  {expense.kind === "installment" && expense.debtId ? expense.status === "paid" ? "Editar pagamento" : "Pagar parcela" : "Editar gasto"}
                 </DropdownMenuItem>
-                {!expense.cardId && expense.kind !== "debt" ? (
+                {!expense.cardId && expense.kind !== "debt" && (!(expense.kind === "installment" && expense.debtId) || expense.status === "paid") ? (
                   <DropdownMenuItem onSelect={() => onToggle(expense)}>
                     <Banknote />
-                    {expense.status === "paid"
+                    {expense.kind === "installment" && expense.debtId ? "Desfazer pagamento" : expense.status === "paid"
                       ? "Marcar como previsto"
                       : "Marcar como pago"}
                   </DropdownMenuItem>
                 ) : null}
-                <DropdownMenuSeparator />
+                {!(expense.kind === "installment" && expense.debtId) ? <><DropdownMenuSeparator />
                 <DropdownMenuItem
                   variant="destructive"
                   onSelect={() => onDelete(expense)}
@@ -210,7 +211,7 @@ export function ExpenseList({
                   {expense.kind === "fixed"
                     ? "Excluir / encerrar recorrência"
                     : "Excluir gasto"}
-                </DropdownMenuItem>
+                </DropdownMenuItem></> : null}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

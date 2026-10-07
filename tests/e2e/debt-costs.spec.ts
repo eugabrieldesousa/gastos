@@ -29,7 +29,7 @@ test.beforeEach(async ({ page }) => {
   await nav(page);
 });
 
-test("lista de 14 custos aberta, inclusão, edição, exclusão, pagamentos e backup", async ({ page }, testInfo) => {
+test("lista de custos recolhível, inclusão, edição, exclusão, pagamentos e backup", async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await newDebt(page);
@@ -43,6 +43,8 @@ test("lista de 14 custos aberta, inclusão, edição, exclusão, pagamentos e ba
   await expect(card).toContainText("Manutenção com meu pai");
   await expect(card).toContainText("Por custos");
   await expect(card.locator(".debt-cost-row")).toHaveCount(14);
+  await expect(card.locator(".debt-cost-row").first()).toBeHidden();
+  await expect(card.getByRole("button", { name: "Custos (14)", exact: true })).toHaveAttribute("aria-expanded", "false");
   await expect(card.locator(".debt-cost-list")).toContainText("Graxa/grafite — descrição pouco legível");
   expect((await data(page)).expenses).toEqual([]);
   await page.getByRole("button", { name: "Adicionar custo", exact: true }).click();
@@ -51,6 +53,9 @@ test("lista de 14 custos aberta, inclusão, edição, exclusão, pagamentos e ba
   await page.getByRole("button", { name: "Salvar custos", exact: true }).click();
   await saved(page);
   await expect(card.locator(".debt-metrics")).toContainText("2.709,01");
+  const toggle = card.getByRole("button", { name: "Custos (15)", exact: true });
+  await toggle.focus(); await toggle.press("Enter");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("button", { name: "Editar custo Óleo", exact: true }).click();
   await page.getByLabel("Valor do custo 1", { exact: true }).fill("50,01");
   await page.getByRole("button", { name: "Salvar custo", exact: true }).click();
@@ -74,6 +79,7 @@ test("lista de 14 custos aberta, inclusão, edição, exclusão, pagamentos e ba
   await page.getByRole("button", { name: "Cancelar", exact: true }).click();
   await page.reload(); await nav(page);
   await expect(card.locator(".debt-cost-row")).toHaveCount(14);
+  await expect(card.locator(".debt-cost-row").first()).toBeHidden();
   await expect(card.locator(".debt-metrics")).toContainText("2.000,00");
   await page.getByRole("button", { name: "Backup", exact: true }).click();
   const download = page.waitForEvent("download");
@@ -89,6 +95,7 @@ test("lista de 14 custos aberta, inclusão, edição, exclusão, pagamentos e ba
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await expect(card.locator(".debt-cost-row")).toHaveCount(14);
   expect((await data(page)).debts[0].costs).toEqual(backup.debts[0].costs);
+  await card.getByRole("button", { name: "Custos (14)", exact: true }).click();
   await card.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `.artifacts/debt-costs-${testInfo.project.name}.png`, fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -161,6 +168,7 @@ test("dívida quitada reabre com novo custo e bloqueia exclusão abaixo do pago"
   await page.getByRole("button", { name: "Salvar custos", exact: true }).click();
   await saved(page);
   await expect(page.getByRole("button", { name: "Registrar pagamento", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Custos (2)", exact: true }).click();
   await page.getByRole("button", { name: "Excluir custo Peça", exact: true }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Excluir custo", exact: true }).click();
   await expect(page.getByRole("alertdialog").getByRole("alert")).toContainText("pagamentos");
