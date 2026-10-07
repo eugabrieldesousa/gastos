@@ -13,3 +13,5 @@ next-env.d.ts
 .DS_Store
 mes-backup-*.json
 mes-relatorio-ia-*.json
+orbt-backup-*.json
+orbt-relatorio-ia-*.json

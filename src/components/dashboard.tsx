@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
-import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
   ArrowDownLeft,
@@ -11,20 +10,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
-  CreditCard as CardIcon,
   Download,
-  LayoutDashboard,
-  Leaf,
+  Orbit,
   LoaderCircle,
   Pencil,
   Plus,
   RefreshCw,
-  Repeat2,
   ShieldCheck,
   Sparkles,
-  Tags,
   Upload,
-  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -63,6 +57,10 @@ import { CardsPanel } from "@/components/cards-panel";
 import { InstallmentsPanel } from "@/components/installments-panel";
 import { CategoriesPanel } from "@/components/categories-panel";
 import { useFinance } from "@/hooks/use-finance";
+import { useNotes } from "@/hooks/use-notes";
+import { AppSidebar, MobileNavigation, APP_PAGES, type AppPage } from "./app-sidebar";
+import { IncomesPanel } from "./incomes-panel";
+import { NotesPanel } from "./notes-panel";
 import { saveDebtPayment, setDebtInstallmentPayment } from "@/lib/debts";
 const DebtInstallmentPaymentEditor = dynamic(() => import("@/components/debt-installment-payment-editor").then((module) => module.DebtInstallmentPaymentEditor));
 const DebtsPanel = dynamic(() => import("@/components/debts-panel").then((module) => module.DebtsPanel));
@@ -89,22 +87,12 @@ import {
   type NewExpense,
 } from "@/lib/finance";
 
-const pages = [
-  { id: "overview", label: "Dashboard", icon: LayoutDashboard },
-  { id: "expenses", label: "Gastos", icon: Wallet },
-  { id: "cards", label: "Cartões e faturas", icon: CardIcon },
-  { id: "installments", label: "Parcelamentos", icon: Repeat2 },
-  { id: "debts", label: "Dívidas", icon: Banknote },
-  { id: "imports", label: "Importações", icon: Upload },
-  { id: "categories", label: "Categorias", icon: Tags },
-] as const;
-type PageName = (typeof pages)[number]["id"];
-
 export function Dashboard({ account, cloudEnabled = false, historyUrl }: { account?: FinanceAccount; cloudEnabled?: boolean; historyUrl?: string }) {
   const finance = useFinance(account?.id);
+  const notes = useNotes(finance);
   const { data, loading, ready, busy, error, today } = finance;
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
-  const [page, setPage] = useState<PageName>("expenses");
+  const [page, setPage] = useState<AppPage>("expenses");
   const [filter, setFilter] = useState<ExpenseFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [kindFilter, setKindFilter] = useState("");
@@ -139,6 +127,16 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
     [data, month],
   );
   const summary = useMemo(() => monthSummary(data, month), [data, month]);
+
+  async function navigate(next: AppPage) {
+    if (page === "notes" && !await notes.editor.flush()) return false;
+    setPage(next);
+    return true;
+  }
+  function openSalary() {
+    setReturnFocus(document.activeElement as HTMLElement);
+    setSalaryOpen(true);
+  }
 
   function clearFilters() {
     setFilter("all");
@@ -180,18 +178,21 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  function exportBackup() {
-    downloadJson(data, `mes-backup-${today}.json`);
+  async function exportBackup() {
+    if (!await notes.editor.flush()) return;
+    downloadJson(finance.getData(), `orbt-backup-${today}.json`);
     toast.success("Backup exportado.");
   }
-  function exportReport() {
-    downloadJson(financialReport(data, month, today), `mes-relatorio-ia-${today}.json`);
+  async function exportReport() {
+    if (!await notes.editor.flush()) return;
+    downloadJson(financialReport(finance.getData(), month, today), `orbt-relatorio-ia-${today}.json`);
     toast.success("Relatório para IA exportado.");
   }
   async function readBackup(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (!await notes.editor.flush()) return;
     setReadingBackup(true);
     try {
       if (file.size > 100 * 1024 * 1024)
@@ -242,17 +243,20 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
 
   return (
     <div className="app-shell">
+      <AppSidebar page={page} navigate={navigate} />
+      <div className="app-body">
       <header className="app-header">
         <div className="shell-container header-content">
-          <Link href="/" aria-label="mês. — Início" className="brand">
+          <div className="header-brand-group">
+          <MobileNavigation page={page} navigate={navigate} />
+          <button onClick={() => void navigate("expenses")} aria-label="Orbt — Início" className="brand">
             <span className="brand-icon">
-              <Leaf size={19} />
+              <Orbit size={19} />
             </span>
-            <span>
-              mês<span className="text-primary">.</span>
-            </span>
-          </Link>
-          <span className="header-tagline">Seu dinheiro, com clareza.</span>
+            <span>Orbt</span>
+          </button>
+          </div>
+          <span className="header-tagline">Sua central pessoal</span>
           <div className="header-actions">
             <ThemeMenu />
             <DropdownMenu>
@@ -273,11 +277,11 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem disabled={!ready} onSelect={exportBackup}>
+                <DropdownMenuItem disabled={!ready} onSelect={() => void exportBackup()}>
                   <Download />
                   Exportar backup
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled={!ready} onSelect={exportReport}>
+                <DropdownMenuItem disabled={!ready} onSelect={() => void exportReport()}>
                   <Sparkles />
                   Exportar relatório para IA
                 </DropdownMenuItem>
@@ -288,7 +292,7 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <AccountMenu account={account} enabled={cloudEnabled} busy={busy} canTransfer={ready && data.revision === 0 && finance.localAvailable} reload={finance.reload} transfer={finance.transferLocal} historyUrl={historyUrl} />
+            <AccountMenu account={account} enabled={cloudEnabled} busy={busy} canTransfer={ready && data.revision === 0 && finance.localAvailable} reload={finance.reload} transfer={finance.transferLocal} historyUrl={historyUrl} beforeLeave={notes.editor.flush} />
           </div>
           <input
             ref={fileInput}
@@ -303,10 +307,10 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
       <main className="shell-container workspace">
         <div className="workspace-toolbar">
           <div>
-            <span className="eyebrow">SEU CONTROLE FINANCEIRO</span>
-            <h1>{pages.find((p) => p.id === page)?.label}</h1>
+            <span className="eyebrow">{page === "notes" ? "SUA CENTRAL PESSOAL" : "SEU CONTROLE FINANCEIRO"}</span>
+            <h1>{APP_PAGES.find((p) => p.id === page)?.label}</h1>
           </div>
-          <div className="toolbar-actions">
+          {page !== "notes" && <div className="toolbar-actions">
             <div className="month-navigation">
               <Button
                 variant="ghost"
@@ -362,7 +366,7 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
               <Plus size={16} />
               Adicionar gasto
             </Button>
-          </div>
+          </div>}
         </div>
         {error ? (
           <Alert variant="destructive" className="workspace-error">
@@ -381,36 +385,34 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
             </AlertDescription>
           </Alert>
         ) : null}
-        <section
+        {page !== "notes" && <section
           className="summary-grid"
           aria-label="Resumo do mês"
           aria-busy={loading}
         >
           <div className="summary-card">
             <div className="summary-label">
-              <span>Salário do mês</span>
+              <span>Receita prevista</span>
               <Banknote size={16} />
             </div>
             <strong className="summary-value" data-testid="salary-total">
               {loading
                 ? "—"
-                : summary.salary === null
+                : summary.revenue === null
                   ? "Não informado"
-                  : formatMoney(summary.salary)}
+                  : formatMoney(summary.revenue)}
             </strong>
             <Button
               className="salary-edit"
               variant="ghost"
               size="sm"
               disabled={disabled}
-              onClick={() => {
-                setReturnFocus(document.activeElement as HTMLElement);
-                setSalaryOpen(true);
-              }}
+              onClick={openSalary}
             >
               <Pencil size={11} />
               {summary.salary === null ? "Informar salário" : "Editar salário"}
             </Button>
+            <span className="summary-caption">Salário: {summary.salary === null ? "não informado" : formatMoney(summary.salary)} · Extras: {formatMoney(summary.incomeReceived + summary.incomePlanned)}</span>
           </div>
           <div className="summary-card">
             <div className="summary-label">
@@ -449,10 +451,10 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
             </strong>
             <span className="summary-caption">
               {summary.remaining === null
-                ? "Informe o salário para calcular"
+                ? "Informe o salário ou adicione ganhos"
                 : summary.remaining < 0
                   ? "Os gastos ultrapassam o saldo disponível"
-                  : "Depois de todos os gastos"}
+                  : summary.salary === null ? "Salário não informado; inclui ganhos extras" : "Depois de todos os gastos"}
             </span>
             {summary.received > 0 && <span className="summary-caption carryover-caption" data-testid="received-balance">
               {summary.salary === null ? "Sobra recebida: " : "Inclui "}{formatMoney(summary.received)} de sobra de {monthLabel(shiftMonth(month, -1))}.{" "}
@@ -467,24 +469,14 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
               <ArrowUpRight size={13} />{summary.transferred > 0 ? "Editar transferência de sobra" : month === today.slice(0, 7) ? "Simular próximo mês" : "Levar sobra para o próximo mês"}
             </Button>}
           </div>
-        </section>
-        <nav className="workspace-navigation" aria-label="Seções do sistema">
-          {pages.map((item) => (
-            <button
-              key={item.id}
-              aria-current={page === item.id ? "page" : undefined}
-              onClick={() => setPage(item.id)}
-            >
-              <item.icon size={16} />
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
+        </section>}
         <div
           className={`workspace-content ${page === "overview" ? "overview-content" : ""}`}
           aria-busy={loading}
         >
-          {loading ? (
+          {page === "notes" ? (
+            <NotesPanel {...notes} notes={data.notes} ready={ready} busy={busy} reload={finance.reload} commit={finance.commit} />
+          ) : loading ? (
             <div className="loading-state">
               <LoaderCircle className="animate-spin" />
               Carregando seus dados…
@@ -499,6 +491,8 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
             </div>
           ) : page === "overview" ? (
             <AnalyticsPanel data={data} month={month} today={today} onMonthChange={changeMonth} selectCategory={selectCategory} selectKind={selectKind} onOpenUpcoming={(cardId) => { if (cardId) {setSelectedCard(cardId); setPage("cards");} else {setFilter("planned"); setPage("expenses");} }} />
+          ) : page === "incomes" ? (
+            <IncomesPanel data={data} month={month} today={today} disabled={disabled} busy={busy} onSalary={openSalary} commit={finance.commit} />
           ) : page === "expenses" ? (
             <ExpensesPanel key={`${month}:${filter}:${categoryFilter}:${kindFilter}`} data={data} month={month} allExpenses={allExpenses} listProps={listProps} initialFilter={filter} initialCategory={categoryFilter} initialKind={kindFilter} />
           ) : page === "cards" ? (
@@ -516,11 +510,12 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
         <footer className="workspace-footer">
           <span>
             <ShieldCheck size={12} />
-            {account ? (busy ? "Salvando no GitHub…" : error ? "Sincronização pendente" : loading ? "Carregando sua conta…" : "Salvo no GitHub") : "Salvo neste navegador"}
+            {notes.dirty ? "Notas com alterações pendentes" : busy ? "Salvando…" : error ? "Sincronização pendente" : loading ? "Carregando…" : account ? "Salvo no GitHub" : "Salvo neste navegador"}
           </span>
-          <span>Um mês de cada vez.</span>
+          <span>Sua central pessoal.</span>
         </footer>
       </main>
+      </div>
       {salaryOpen && month ? (
         <SalaryDialog
           month={month}
@@ -697,7 +692,8 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
               disabled={busy}
               onClick={async (event) => {
                 event.preventDefault();
-                if (backup && (await finance.restore(backup.data))) {
+                if (backup && await notes.editor.flush() && (await finance.restore(backup.data))) {
+                  notes.editor.clearAfterDelete();
                   setBackup(null);
                   clearFilters();
                   setSelectedCard("");

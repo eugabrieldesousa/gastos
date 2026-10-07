@@ -116,6 +116,7 @@ export function useFinance(userId?: string) {
   const commit = async (
     change: (previous: FinanceData) => FinanceData,
     message: string,
+    options?: { silent?: boolean },
   ): Promise<boolean> => {
     if (lock.current || !ready) return false;
     lock.current = true;
@@ -128,7 +129,7 @@ export function useFinance(userId?: string) {
       );
       accept(next);
       channel.current?.postMessage({ userId });
-      toast.success(message);
+      if (!options?.silent) toast.success(message);
       return true;
     } catch (cause) {
       const message =
@@ -136,7 +137,7 @@ export function useFinance(userId?: string) {
           ? cause.message
           : "Não foi possível salvar seus dados.";
       setError(message);
-      toast.error(message);
+      if (!options?.silent) toast.error(message);
       if (userId || cause instanceof StorageConflictError) setReady(false);
       return false;
     } finally {
@@ -180,5 +181,5 @@ export function useFinance(userId?: string) {
     }, "Dados transferidos para sua conta.");
   };
 
-  return { data, loading, ready, busy, error, today, reload, commit, restore, localAvailable, transferLocal };
+  return { data, loading, ready, busy, error, today, reload, commit, restore, localAvailable, transferLocal, getData: () => current.current };
 }

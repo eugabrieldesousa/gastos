@@ -1,3 +1,4 @@
+import { navigate } from "../helpers/navigation";
 import { expect, test } from "@playwright/test";
 
 test("cria categoria dentro do gasto sem perder o formulário e devolve o foco", async ({
@@ -31,7 +32,7 @@ test("cria categoria dentro do gasto sem perder o formulário e devolve o foco",
   await page.getByRole("button", { name: "Salvar gasto", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByTestId("month-total")).toHaveText(/40,00/);
-  await page.getByRole("button", { name: "Categorias", exact: true }).click();
+  await navigate(page, "Categorias");
   await page
     .getByRole("button", { name: "Editar categoria Livros", exact: true })
     .click();

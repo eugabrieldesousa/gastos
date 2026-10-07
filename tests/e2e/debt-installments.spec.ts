@@ -1,9 +1,10 @@
+import { navigate } from "../helpers/navigation";
 import { expect, test, type Page } from "@playwright/test";
 import { emptyFinanceData, type FinanceData } from "../../src/lib/finance";
 import { saveDebt } from "../../src/lib/debts";
 
 async function nav(page: Page, section: string) {
-  await page.getByRole("navigation", { name: "Seções do sistema" }).getByRole("button", { name: section, exact: true }).click();
+  await navigate(page, section);
 }
 const read = (page: Page): Promise<FinanceData> => page.evaluate(() => JSON.parse(localStorage.getItem("mes.finance.v1")!));
 async function create(page: Page, paidCount = 0) {

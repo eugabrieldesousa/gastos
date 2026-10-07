@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescript
 
 export type FinanceAccount = { id: string; name: string };
 
-export function AccountMenu({ account, enabled, busy, canTransfer, reload, transfer, historyUrl }: {
+export function AccountMenu({ account, enabled, busy, canTransfer, reload, transfer, historyUrl, beforeLeave }: {
   account?: FinanceAccount;
   enabled: boolean;
   busy: boolean;
@@ -19,6 +19,7 @@ export function AccountMenu({ account, enabled, busy, canTransfer, reload, trans
   reload: () => Promise<void>;
   transfer: () => Promise<boolean>;
   historyUrl?: string;
+  beforeLeave?: () => Promise<boolean>;
 }) {
   const [notice, setNotice] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -34,7 +35,7 @@ export function AccountMenu({ account, enabled, busy, canTransfer, reload, trans
   }
 
   if (!account) return <>
-    {enabled ? <form action={loginWithGitHub}>
+    {enabled ? <form action={async () => { if (!beforeLeave || await beforeLeave()) await loginWithGitHub(); }}>
       <Button className="account-button" type="submit" title="Entrar com GitHub" aria-label="Entrar com GitHub">
         <LogIn aria-hidden="true" /><span className="account-button-label">Entrar com GitHub</span>
       </Button>
@@ -63,7 +64,7 @@ export function AccountMenu({ account, enabled, busy, canTransfer, reload, trans
         {historyUrl && <DropdownMenuItem asChild><a href={historyUrl} target="_blank" rel="noopener noreferrer"><History />Ver histórico no GitHub</a></DropdownMenuItem>}
         {canTransfer && <DropdownMenuItem disabled={busy} onSelect={() => setConfirm(true)}><Upload />Transferir dados deste navegador</DropdownMenuItem>}
         <DropdownMenuSeparator />
-        <form action={logout}><Button disabled={busy} type="submit" variant="ghost" className="w-full justify-start"><LogOut />Sair da conta</Button></form>
+        <form action={async () => { if (!beforeLeave || await beforeLeave()) await logout(); }}><Button disabled={busy} type="submit" variant="ghost" className="w-full justify-start"><LogOut />Sair da conta</Button></form>
       </DropdownMenuContent>
     </DropdownMenu>
     <AlertDialog open={confirm} onOpenChange={(open) => { if (!transferring) setConfirm(open); }}>

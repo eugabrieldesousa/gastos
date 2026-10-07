@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { emptyFinanceData, type FinanceData } from "../../src/lib/finance";
+import { emptyFinanceData, saveIncome, saveNote, type FinanceData } from "../../src/lib/finance";
 import { financeApi } from "../../src/lib/finance-api";
 import type { CloudStore } from "../../src/lib/cloud-store";
 import { RemoteFinanceRepository } from "../../src/lib/remote-repository";
@@ -28,6 +28,25 @@ function store(): CloudStore {
 }
 
 describe("API financeira autenticada", () => {
+  it("repositório remoto salva ganhos e notas via API e mantém isolamento entre contas", async () => {
+    const db = store();
+    const api = financeApi(db, async () => "github:100");
+    const fetcher: typeof fetch = async (_input, init) => api(new Request(`${origin}/api/finance`, {
+      ...init, headers: { ...Object.fromEntries(new Headers(init?.headers)), Origin: origin },
+    }));
+    const repository = new RemoteFinanceRepository(fetcher);
+    const initial = await repository.read();
+    const note = { id: crypto.randomUUID(), title: "Freelas", content: "Contato do cliente", createdAt: "2026-10-07T12:00:00.000Z", updatedAt: "2026-10-07T12:00:00.000Z" };
+    const data = saveNote(saveIncome(initial, { description: "Freela", amountCents: 50000, date: "2026-10-07", status: "received" }), note);
+    const saved = await repository.write(data, initial.revision);
+    expect(saved).toMatchObject({ version: 5, revision: 1, notes: [note], incomes: data.incomes });
+    expect(await repository.read()).toEqual(saved);
+    expect((await db.read("github:200")).notes).toEqual([]);
+    expect((await db.read("github:200")).incomes).toEqual([]);
+    const invalid = await api(put({ data: { ...saved, notes: [note, note] }, expectedRevision: 1 }));
+    expect(invalid.status).toBe(400);
+    expect(await repository.read()).toEqual(saved);
+  });
   it("salva combinado completo e recusa perda de parcela na API", async () => {
     const db = store();
     const api = financeApi(db, async () => "github:100");

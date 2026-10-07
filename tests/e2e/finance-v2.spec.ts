@@ -1,11 +1,7 @@
+import { navigate } from "../helpers/navigation";
 import { expect, test, type Page } from "@playwright/test";
 
-async function nav(page: Page, name: string) {
-  await page
-    .getByRole("navigation", { name: "Seções do sistema" })
-    .getByRole("button", { name, exact: true })
-    .click();
-}
+const nav = navigate;
 async function add(
   page: Page,
   options: {
@@ -255,7 +251,7 @@ test("migração v1 e viewport com listas extensas em todas as áreas", async ({
   const stored = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("mes.finance.v1")!),
   );
-  expect(stored.version).toBe(4);
+  expect(stored.version).toBe(5);
   expect(stored.expenses).toHaveLength(71);
   expect(stored.revision).toBe(6);
 });

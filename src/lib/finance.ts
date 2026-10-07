@@ -420,10 +420,37 @@ function validateV3(data: Omit<z.infer<typeof financeV3Object>, "version">, ctx:
   }
 }
 const financeV3Schema = financeV3Object.superRefine(validateCore).superRefine(validateV3);
-export const financeSchema = financeV3Object.extend({
+const financeV4Object = financeV3Object.extend({
   version: z.literal(4),
   balanceTransfers: z.record(monthSchema.refine((month) => month < "9999-12", "O destino deve existir no calendário."), centsSchema.refine((amount) => amount > 0)),
-}).superRefine(validateCore).superRefine(validateV3);
+});
+const financeV4Schema = financeV4Object.superRefine(validateCore).superRefine(validateV3);
+export const incomeSchema = z.object({
+  id: z.string().uuid(),
+  description: z.string().trim().min(1).max(120),
+  amountCents: centsSchema.refine((value) => value > 0),
+  date: z.string().refine(isValidDate),
+  status: z.enum(["planned", "received"]),
+}).strict();
+export const noteSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().max(120),
+  content: z.string().max(100000),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+}).strict().refine((note) => note.updatedAt >= note.createdAt, "Data de alteração inválida.");
+export const financeSchema = financeV4Object.extend({
+  version: z.literal(5),
+  incomes: z.array(incomeSchema).max(10000),
+  notes: z.array(noteSchema).max(1000),
+}).superRefine(validateCore).superRefine(validateV3).superRefine((data, ctx) => {
+  for (const collection of [data.incomes, data.notes]) {
+    if (new Set(collection.map((item) => item.id)).size !== collection.length)
+      ctx.addIssue({ code: "custom", message: "Os dados contêm identificadores duplicados." });
+  }
+});
+export type Income = z.infer<typeof incomeSchema>;
+export type Note = z.infer<typeof noteSchema>;
 export type Debt = z.infer<typeof debtSchema>;
 export type DebtInput = Omit<z.input<typeof debtSchema>, "id">;
 export type DebtCost = z.infer<typeof debtCostSchema>;
@@ -450,10 +477,12 @@ export type ExpenseFilter = "all" | Expense["status"];
 
 export function emptyFinanceData(): FinanceData {
   return {
-    version: 4,
+    version: 5,
     revision: 0,
     salaries: {},
     balanceTransfers: {},
+    incomes: [],
+    notes: [],
     expenses: [],
     categories: CATEGORIES.map((name, index) => ({
       id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
@@ -590,6 +619,10 @@ export function expensesForMonth(
 export function monthSummary(data: FinanceData, month: string) {
   const expenses = expensesForMonth(data, month);
   const salary = data.salaries[month] ?? null;
+  const incomes = data.incomes.filter((item) => item.date.slice(0, 7) === month);
+  const incomeReceived = incomes.reduce((sum, item) => sum + (item.status === "received" ? item.amountCents : 0), 0);
+  const incomePlanned = incomes.reduce((sum, item) => sum + (item.status === "planned" ? item.amountCents : 0), 0);
+  const revenue = salary === null && !incomes.length ? null : (salary ?? 0) + incomeReceived + incomePlanned;
   const paid = expenses.reduce(
     (total, expense) =>
       total + (expense.status === "paid" ? expense.amountCents : 0),
@@ -601,9 +634,12 @@ export function monthSummary(data: FinanceData, month: string) {
     0,
   );
   const received = month && month > "1000-01" ? data.balanceTransfers[shiftMonth(month, -1)] ?? 0 : 0;
-  const ownRemaining = salary === null ? null : salary - paid - planned;
+  const ownRemaining = revenue === null ? null : revenue - paid - planned;
   return {
     salary,
+    incomeReceived,
+    incomePlanned,
+    revenue,
     paid,
     planned,
     total: paid + planned,
@@ -680,13 +716,29 @@ export function parseFinanceData(value: unknown): FinanceData {
   }
   if (typeof value === "object" && value !== null && "version" in value && value.version === 2) {
     const old = financeV2Schema.parse(value);
-    return financeSchema.parse({ ...old, version: 4, balanceTransfers: {}, expenses: old.expenses.map((e) => expenseSchema.parse(e)), debts: [], bankSources: [], importRecords: [] });
+    return financeSchema.parse({ ...old, version: 5, incomes: [], notes: [], balanceTransfers: {}, expenses: old.expenses.map((e) => expenseSchema.parse(e)), debts: [], bankSources: [], importRecords: [] });
   }
   if (typeof value === "object" && value !== null && "version" in value && value.version === 3) {
     const old = financeV3Schema.parse(value);
-    return financeSchema.parse({ ...old, version: 4, balanceTransfers: {} });
+    return financeSchema.parse({ ...old, version: 5, incomes: [], notes: [], balanceTransfers: {} });
+  }
+  if (typeof value === "object" && value !== null && "version" in value && value.version === 4) {
+    const old = financeV4Schema.parse(value);
+    return financeSchema.parse({ ...old, version: 5, incomes: [], notes: [] });
   }
   return financeSchema.parse(value);
+}
+
+export function saveIncome(data: FinanceData, input: Omit<Income, "id">, id = crypto.randomUUID()): FinanceData {
+  const income = incomeSchema.parse({ ...input, id });
+  return financeSchema.parse({ ...data, incomes: data.incomes.some((item) => item.id === id)
+    ? data.incomes.map((item) => item.id === id ? income : item) : [...data.incomes, income] });
+}
+
+export function saveNote(data: FinanceData, note: Note): FinanceData {
+  const valid = noteSchema.parse(note);
+  return financeSchema.parse({ ...data, notes: data.notes.some((item) => item.id === note.id)
+    ? data.notes.map((item) => item.id === note.id ? valid : item) : [...data.notes, valid] });
 }
 
 export function dateInMonth(month: string, day: number): string {

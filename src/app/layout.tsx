@@ -11,8 +11,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "mês. — Controle de gastos",
-  description: "Seu salário, seus gastos e um mês com mais clareza.",
+  title: "Orbt — Sua central pessoal",
+  description: "Sua central pessoal para finanças, ganhos e notas.",
 };
 
 export default function RootLayout({

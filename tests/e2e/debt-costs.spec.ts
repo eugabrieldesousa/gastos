@@ -1,9 +1,10 @@
+import { navigate } from "../helpers/navigation";
 import { expect, test, type Page } from "@playwright/test";
 import { exampleCosts } from "../fixtures/debt-costs";
 import type { FinanceData } from "../../src/lib/finance";
 
 async function nav(page: Page) {
-  await page.getByRole("navigation", { name: "Seções do sistema" }).getByRole("button", { name: "Dívidas", exact: true }).click();
+  await navigate(page, "Dívidas");
 }
 async function data(page: Page): Promise<FinanceData> {
   return page.evaluate(() => JSON.parse(localStorage.getItem("mes.finance.v1")!));

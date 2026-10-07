@@ -102,29 +102,29 @@ export function AnalyticsPanel({ data, month, today, onMonthChange, onOpenUpcomi
             </h2>
           </div>
           <div
-            className={`insights-body ${summary.salary !== null && summary.total > summary.salary ? "commitment-danger" : summary.salary !== null && summary.total >= summary.salary * 0.8 ? "commitment-warning" : ""}`}
+            className={`insights-body ${summary.revenue !== null && summary.total > summary.revenue ? "commitment-danger" : summary.revenue !== null && summary.total >= summary.revenue * 0.8 ? "commitment-warning" : ""}`}
             tabIndex={0}
             role="region"
             aria-label="Detalhes da análise do mês"
           >
             <div className="salary-insight">
               <strong>
-                {summary.salary !== null && summary.salary > 0
-                  ? `${Math.round((summary.total / summary.salary) * 100)}%`
+                {summary.revenue !== null && summary.revenue > 0
+                  ? `${Math.round((summary.total / summary.revenue) * 100)}%`
                   : "—"}
               </strong>
               <span>
-                {summary.salary === null
-                  ? "Informe o salário para analisar o comprometimento."
-                  : summary.salary === 0
-                    ? "Salário zero: os gastos são exibidos na sobra prevista."
-                    : "do salário comprometido"}
+                {summary.revenue === null
+                  ? "Informe o salário ou ganhos para analisar o comprometimento."
+                  : summary.revenue === 0
+                    ? "Receita zero: os gastos são exibidos na sobra prevista."
+                    : "da receita prevista comprometida"}
               </span>
             </div>
             <div className="commitment-track">
               <span
                 style={{
-                  width: `${summary.salary && summary.salary > 0 ? Math.min(100, (summary.total / summary.salary) * 100) : 0}%`,
+                  width: `${summary.revenue && summary.revenue > 0 ? Math.min(100, (summary.total / summary.revenue) * 100) : 0}%`,
                 }}
               />
             </div>
@@ -215,7 +215,7 @@ export function AnalyticsPanel({ data, month, today, onMonthChange, onOpenUpcomi
                 onClick={() => onMonthChange(item.month)}
               >
                 <span>{monthLabel(item.month)}</span>
-                <strong>{formatMoney(item.summary.total)}</strong>
+                <span className="forecast-values"><strong>Gastos: {formatMoney(item.summary.total)}</strong><small>Receita: {item.summary.revenue === null ? "—" : formatMoney(item.summary.revenue)} · Sobra: {item.summary.remaining === null ? "—" : formatMoney(item.summary.remaining)}</small></span>
               </button>
             ))}
           </div>

@@ -1,3 +1,4 @@
+import { navigate } from "../helpers/navigation";
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { addExpense, emptyFinanceData, saveCard, type FinanceData } from "../../src/lib/finance";
@@ -43,7 +44,7 @@ test("Gastos inicia com faturas recolhidas; filtros mostram os itens e subtotais
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await page.getByLabel("Buscar gastos").fill("Mercad");
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  await page.getByRole("button", { name: "Dashboard", exact: true }).click();
+  await navigate(page, "Dashboard");
   await expect(page.getByRole("heading", { name: "Por categoria", exact: true })).toBeVisible();
   await expect(page.getByTestId("expense-row")).toHaveCount(0);
   await page.getByRole("button", { name: "Ver gastos: Alimentação", exact: true }).click();
@@ -77,7 +78,7 @@ test("sobra opcional pode ser confirmada, editada, removida e exportada para IA"
   const downloading = page.waitForEvent("download");
   await page.getByRole("menuitem", { name: "Exportar relatório para IA", exact: true }).click();
   const download = await downloading;
-  expect(download.suggestedFilename()).toBe("mes-relatorio-ia-2026-12-05.json");
+  expect(download.suggestedFilename()).toBe("orbt-relatorio-ia-2026-12-05.json");
   const report = JSON.parse(await readFile((await download.path())!, "utf8"));
   expect(report.tipo).toBe("relatorio_financeiro_para_ia");
   expect(report.transferencias_de_sobra[0]).toMatchObject({ mes_origem: "2026-10", mes_destino: "2026-11", valor_centavos: 25000 });
@@ -130,7 +131,7 @@ test("simulação informa o salário ausente e mostra a sobra a receber separada
   await page.getByRole("button", { name: "Simular próximo mês", exact: true }).click();
   await expect(page.getByTestId("simulation-remaining")).toHaveText("—");
   await expect(page.getByTestId("simulation-received")).toHaveText(/400,00/);
-  await expect(page.getByRole("dialog")).toContainText("Informe o salário do próximo mês");
+  await expect(page.getByRole("dialog")).toContainText("Informe o salário ou ganhos do próximo mês");
   expect((await stored(page)).balanceTransfers).toEqual({});
 });
 
@@ -141,7 +142,7 @@ test("parcela 4/5 mostra 80% com histórico e parcela atual, nos dois temas e ta
   for (const theme of ["Claro", "Escuro"]) {
     await page.getByRole("button", { name: /^Tema/ }).click();
     await page.getByRole("menuitemradio", { name: theme, exact: true }).click();
-    await page.getByRole("button", { name: "Parcelamentos", exact: true }).click();
+    await navigate(page, "Parcelamentos");
     const progress = page.getByRole("progressbar", { name: "Posição das parcelas de Compra em andamento", exact: true });
     await expect(progress).toHaveAttribute("aria-valuenow", "4");
     await expect(progress).toHaveAttribute("aria-valuemax", "5");
@@ -149,7 +150,7 @@ test("parcela 4/5 mostra 80% com histórico e parcela atual, nos dois temas e ta
     await expect(page.locator(".installment-card")).toContainText("0 pagas registradas");
     await expect(page.locator(".installment-card")).toContainText("4/5 · Atual, pendente");
     await page.screenshot({ path: testInfo.outputPath(`parcelas-${theme}.png`) });
-    await page.getByRole("button", { name: "Dashboard", exact: true }).click();
+    await navigate(page, "Dashboard");
     await expect(page.getByRole("heading", { name: "Análise do mês", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}.png`) });

@@ -1,3 +1,4 @@
+import { navigate } from "../helpers/navigation";
 import { expect, test, type Page } from "@playwright/test";
 import { addExpense, emptyFinanceData, saveCard } from "../../src/lib/finance";
 
@@ -136,11 +137,11 @@ test("temas mantêm contraste, gráficos legíveis e rolagem em painéis e modai
   await ready(page);
   for (const label of ["Claro", "Escuro"] as const) {
     await chooseTheme(page, label);
-    await page.getByRole("button", { name: "Gastos", exact: true }).click();
+    await navigate(page, "Gastos");
     const ratios = await contrast(page, [".summary-label", ".summary-value", ".summary-caption", ".quiet-label", ".chart-legend span", ".chart-legend small", ".expense-description strong", ".expense-description small", ".expense-status", ".workspace-footer", ".theme-button", ".backup-button"]);
     expect(ratios.length).toBeGreaterThan(15);
     for (const pair of ratios) expect(pair.ratio, JSON.stringify(pair)).toBeGreaterThanOrEqual(4.5);
-    await page.getByRole("button", { name: "Dashboard", exact: true }).click();
+    await navigate(page, "Dashboard");
     const charts = await contrast(page, [".donut .data-color"], "stroke");
     expect(charts.length).toBeGreaterThan(0);
     for (const pair of charts) expect(pair.ratio, JSON.stringify(pair)).toBeGreaterThanOrEqual(3);
@@ -154,7 +155,7 @@ test("temas mantêm contraste, gráficos legíveis e rolagem em painéis e modai
     await expect(input).toHaveCSS("outline-width", "2px");
     await page.keyboard.press("Escape");
   }
-  await page.getByRole("button", { name: "Gastos", exact: true }).click();
+  await navigate(page, "Gastos");
   const panel = page.locator(".full-panel .panel-scroll");
   await expect(panel).toBeVisible();
   expect(await panel.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
@@ -178,7 +179,7 @@ test("guia dos bancos está disponível sem origem e acompanha banco e tipo sele
   await page.goto("/");
   await ready(page);
   await chooseTheme(page, "Escuro");
-  await page.getByRole("button", { name: "Importações", exact: true }).click();
+  await navigate(page, "Importações");
   const guide = page.locator(".bank-guide");
   await guide.locator("summary").focus();
   await page.keyboard.press("Enter");

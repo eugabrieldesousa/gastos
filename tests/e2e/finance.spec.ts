@@ -1,3 +1,4 @@
+import { navigate } from "../helpers/navigation";
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
@@ -61,7 +62,7 @@ test("fluxo mensal: salário, gastos, filtros, edição, status, persistência e
   await expect(page.getByTestId("remaining-total")).toHaveText(/3\.000,00/);
   await expect(page.getByTestId("paid-total")).toHaveText(/1\.200,00/);
   await expect(page.getByTestId("planned-total")).toHaveText(/800,00/);
-  await page.getByRole("button", { name: "Gastos", exact: true }).click();
+  await navigate(page, "Gastos");
   await page.getByRole("tab", { name: "Previstos", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Ações para Mercado" }),
@@ -88,10 +89,10 @@ test("fluxo mensal: salário, gastos, filtros, edição, status, persistência e
   ).toHaveCount(0);
   await page.reload();
   await expect(page.getByTestId("remaining-total")).toHaveText(/3\.000,00/);
-  await page.getByRole("button", { name: "Próximo mês" }).click();
+  await page.getByRole("button", { name: "Próximo mês", exact: true }).click();
   await expect(page.getByTestId("remaining-total")).toHaveText("—");
   await setSalary(page, "6.000,00");
-  await page.getByRole("button", { name: "Mês anterior" }).click();
+  await page.getByRole("button", { name: "Mês anterior", exact: true }).click();
   await expect(page.getByTestId("salary-total")).toHaveText(/5\.000,00/);
   await page.screenshot({
     path: `.artifacts/${testInfo.project.name}-dashboard.png`,
@@ -153,9 +154,9 @@ test("exporta todos os meses e só restaura após confirmação", async ({
 }) => {
   await setSalary(page, "5.000,00");
   await addExpense(page, "Mercado", "1.200,00");
-  await page.getByRole("button", { name: "Próximo mês" }).click();
+  await page.getByRole("button", { name: "Próximo mês", exact: true }).click();
   await setSalary(page, "6.000,00");
-  await page.getByRole("button", { name: "Mês anterior" }).click();
+  await page.getByRole("button", { name: "Mês anterior", exact: true }).click();
   await page.getByRole("button", { name: "Backup", exact: true }).click();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("menuitem", { name: "Exportar backup" }).click();
@@ -274,7 +275,7 @@ test("datas movem o gasto para o mês correto e teclado retorna ao botão", asyn
   await expect(
     page.getByRole("button", { name: "Ações para Viagem" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Mês anterior" }).click();
+  await page.getByRole("button", { name: "Mês anterior", exact: true }).click();
   await expect(page.getByText("Seu mês começa por aqui")).toBeVisible();
 });
 

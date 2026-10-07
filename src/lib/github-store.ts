@@ -91,7 +91,7 @@ export class GitHubFinanceStore implements CloudStore {
     const response = await this.request(previous.endpoint, config, {
       method: "PUT",
       body: JSON.stringify({
-        message: `mês.: salvar dados financeiros (revisão ${next.revision})`,
+        message: `Orbt: salvar dados (revisão ${next.revision})`,
         content: Buffer.from(JSON.stringify(next, null, 2) + "\n", "utf8").toString("base64"),
         branch: previous.branch, ...(previous.sha ? { sha: previous.sha } : {}),
       }),

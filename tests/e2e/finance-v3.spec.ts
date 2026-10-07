@@ -1,10 +1,9 @@
+import { navigate } from "../helpers/navigation";
 import { expect, test, type Page } from "@playwright/test";
 import { addExpense, emptyFinanceData, saveCard, type FinanceData } from "../../src/lib/finance";
 import { saveBankSource } from "../../src/lib/imports";
 
-async function nav(page: Page, name: string) {
-  await page.getByRole("navigation", { name: "Seções do sistema" }).getByRole("button", { name, exact: true }).click();
-}
+const nav = navigate;
 async function readData(page: Page): Promise<FinanceData> {
   return page.evaluate(() => JSON.parse(localStorage.getItem("mes.finance.v1")!));
 }
@@ -72,7 +71,7 @@ test("dívida com entrada, pagamentos variáveis, média, edição, exclusão e 
   await page.getByRole("button", { name: "Backup" }).click();
   const download = page.waitForEvent("download");
   await page.getByRole("menuitem", { name: "Exportar backup", exact: true }).click();
-  expect((await download).suggestedFilename()).toMatch(/mes-backup/);
+  expect((await download).suggestedFilename()).toMatch(/orbt-backup/);
   expect(errors).toEqual([]);
   const width = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, viewport: innerWidth }));
   expect(width.scroll).toBeLessThanOrEqual(width.viewport);
@@ -96,7 +95,7 @@ test("CSV revisável, Pix para dívida, arquivo renomeado e transação igual le
   await page.getByRole("button", { name: "Salvar importação", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Revise antes de importar" })).toHaveCount(0);
   const first = await readData(page);
-  expect(first.version).toBe(4); expect(first.expenses).toHaveLength(2); expect(first.importRecords).toHaveLength(3);
+  expect(first.version).toBe(5); expect(first.expenses).toHaveLength(2); expect(first.importRecords).toHaveLength(3);
   expect(first.expenses.find((e) => e.debtId)?.amountCents).toBe(20000);
   await nav(page, "Dívidas");
   await expect(page.locator(".debt-card")).toContainText("500,00");

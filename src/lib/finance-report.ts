@@ -26,6 +26,12 @@ export function financialReport(data: FinanceData, selectedMonth: string, today:
     const items = expensesForMonth(data, month);
     return {
       mes: month, salario_centavos: summary.salary, gastos_centavos: summary.total,
+      ganhos_recebidos_centavos: summary.incomeReceived, ganhos_previstos_centavos: summary.incomePlanned,
+      receita_prevista_centavos: summary.revenue,
+      ganhos: data.incomes.filter((item) => item.date.slice(0, 7) === month).map((item) => ({
+        descricao: item.description, valor_centavos: item.amountCents, data: item.date,
+        situacao: item.status === "received" ? "Recebido" : "Previsto",
+      })),
       pagos_centavos: summary.paid, previstos_centavos: summary.planned,
       sobra_propria_centavos: summary.ownRemaining, sobra_recebida_centavos: summary.received,
       sobra_prevista_centavos: summary.remaining, sobra_transferida_centavos: summary.transferred,
@@ -45,20 +51,22 @@ export function financialReport(data: FinanceData, selectedMonth: string, today:
     .filter((month) => /^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(month));
   const knownMonths = new Set([
     ...Object.keys(data.salaries), ...data.expenses.map((item) => item.date.slice(0, 7)),
+    ...data.incomes.map((item) => item.date.slice(0, 7)),
     ...data.invoices.map((invoice) => invoice.month), ...data.recurrences.map((rule) => rule.startMonth),
     ...Object.keys(data.balanceTransfers).flatMap((month) => [month, shiftMonth(month, 1)]), selectedMonth,
   ]);
   return {
-    tipo: "relatorio_financeiro_para_ia", versao_relatorio: 1,
+    tipo: "relatorio_financeiro_para_ia", versao_relatorio: 2,
     contexto: {
-      aplicativo: "mês.", idioma: "pt-BR", moeda: "BRL", unidade_monetaria: "centavos inteiros; 100 centavos = R$ 1,00",
+      aplicativo: "Orbt", idioma: "pt-BR", moeda: "BRL", unidade_monetaria: "centavos inteiros; 100 centavos = R$ 1,00",
       gerado_em: today, mes_selecionado: selectedMonth,
       finalidade: "Analisar os dados cadastrados e sugerir melhorias no planejamento financeiro pessoal.",
       regras: [
         "Gastos mensais incluem valores pagos e previstos. Faturas resumem compras já incluídas nos gastos; não some as faturas novamente.",
         "O mês do cartão é o mês da fatura. A data da compra pode ser diferente da data de contabilização.",
-        "Salário null significa não informado; zero significa salário informado igual a zero. Sem salário, a sobra prevista é null.",
-        "Sobra própria = salário - gastos. Sobra prevista = sobra própria + sobra recebida do mês anterior.",
+        "Salário null significa não informado; zero significa salário informado igual a zero. Sem salário e sem ganhos extras, a sobra prevista é null.",
+        "Receita prevista = salário informado + ganhos recebidos + ganhos previstos. Ganhos previstos não comprovam recebimento.",
+        "Sobra própria = receita prevista - gastos. Sobra prevista = sobra própria + sobra recebida do mês anterior.",
         "Transferências de sobra são opcionais, confirmadas e de valor fixo; não são novas receitas, despesas ou pagamentos.",
         "Histórico anterior de compras parceladas não comprova pagamentos registrados. A posição da parcela não é a quantidade paga.",
         "Entrada e histórico de dívidas reduzem o saldo, mas não representam despesas mensais retroativas.",
