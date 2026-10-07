@@ -1787,3 +1787,28 @@ select:focus-visible {
   .overview-content { overflow: auto; grid-template-rows: minmax(225px, 1fr) minmax(240px, 1fr); }
   .overview-main { min-height: 0; }
 }
+
+/* Personal tasks and durable account synchronization. */
+.todos-panel { min-width: 0; }
+.todo-form { padding: 18px; display: grid; gap: 8px; }
+.todo-form-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.todo-form-actions input { flex: 1; min-width: 160px; }
+.todo-list { list-style: none; padding: 0 18px 18px; margin: 0; }
+.todo-list li { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); padding: 12px 0; }
+.todo-check { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; cursor: pointer; }
+.todo-check input { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--primary); }
+.todo-check span { overflow-wrap: anywhere; white-space: pre-wrap; }
+.todo-completed .todo-check span { text-decoration: line-through; color: var(--muted-foreground); }
+.account-sync-status { display: grid; gap: 6px; padding: 10px 12px; max-width: min(320px, calc(100vw - 36px)); font-size: 12px; overflow-wrap: anywhere; }
+.account-sync-status span { color: var(--muted-foreground); }
+.sync-versions { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.sync-versions section { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sync-versions h3 { font-weight: 600; }
+.sync-versions p { font-size: 13px; color: var(--muted-foreground); }
+.sync-versions button { white-space: normal; height: auto; min-height: 36px; }
+.recovery-list { max-height: 50vh; overflow-y: auto; display: grid; gap: 16px; }
+@media (max-width: 600px) {
+  .sync-versions { grid-template-columns: 1fr; }
+  .todo-form-actions input { flex-basis: 100%; }
+  .todo-list { padding-inline: 12px; }
+}

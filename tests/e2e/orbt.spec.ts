@@ -81,7 +81,7 @@ test("notas salvam automaticamente, entram no backup e persistem após recarrega
   const download = await downloading;
   expect(download.suggestedFilename()).toBe("orbt-backup-2026-10-07.json");
   const backup = JSON.parse(await readFile((await download.path())!, "utf8"));
-  expect(backup.version).toBe(5);
+  expect(backup.version).toBe(6);
   expect(backup.notes[0].content).toBe("Texto mais recente");
   await page.reload();
   await navigate(page, "Notas");

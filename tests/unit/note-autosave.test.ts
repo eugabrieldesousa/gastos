@@ -14,6 +14,33 @@ function setup() {
 }
 afterEach(() => { vi.useRealTimers(); });
 describe("salvamento automático de notas", () => {
+  it("recupera rascunho persistido após recarregar, sem perder o texto", async () => {
+    let stored: unknown = null;
+    let data = emptyFinanceData();
+    const access = () => ({ getData: () => data,
+      commit: async (change: (previous: FinanceData) => FinanceData) => { data = change(data); return true; },
+      writeDraft: (value: unknown) => { stored = structuredClone(value); }, readDraft: () => stored });
+    const first = new NoteAutosave(access); await first.select(note()); first.edit({ content: "Texto ainda não enviado" }); first.dispose();
+    expect(stored).toBeTruthy();
+    const reopened = new NoteAutosave(access); reopened.recoverDraft();
+    expect(reopened.getSnapshot().draft?.content).toBe("Texto ainda não enviado"); expect(reopened.getSnapshot().dirty).toBe(true);
+    await reopened.flush(); expect(data.notes[0].content).toBe("Texto ainda não enviado"); expect(stored).toBeNull(); reopened.dispose();
+  });
+  it("suspende autosave antes da limpeza e não recria uma nota excluída", async () => {
+    vi.useFakeTimers(); const { editor, commit, getData, setData } = setup();
+    await editor.select(note()); editor.edit({ content: "Excluir também este rascunho" });
+    await editor.suspend(); setData(emptyFinanceData()); editor.clearAfterDelete();
+    await vi.advanceTimersByTimeAsync(5000); expect(commit).not.toHaveBeenCalled(); expect(getData().notes).toEqual([]); expect(editor.getSnapshot().draft).toBeNull(); editor.dispose();
+  });
+  it("aguarda salvamento em andamento antes de limpar", async () => {
+    const context = setup(); const original = context.commit.getMockImplementation()!;
+    let finish!: () => void;
+    context.commit.mockImplementationOnce(async (change) => { await new Promise<void>((resolve) => { finish = resolve; }); return original(change); });
+    await context.editor.select(note()); const pending = context.editor.flush(); await Promise.resolve();
+    const suspended = context.editor.suspend(); finish(); await suspended; await pending;
+    context.setData(emptyFinanceData()); context.editor.clearAfterDelete();
+    expect(context.getData().notes).toEqual([]); expect(await context.editor.flush()).toBe(true); expect(context.commit).toHaveBeenCalledTimes(1); context.editor.dispose();
+  });
   it("aguarda 1,2 segundo, reinicia ao digitar e salva silenciosamente", async () => {
     vi.useFakeTimers();
     const { editor, commit, getData } = setup();

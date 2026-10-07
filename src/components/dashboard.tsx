@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Sparkles,
   Upload,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -61,12 +62,15 @@ import { useNotes } from "@/hooks/use-notes";
 import { AppSidebar, MobileNavigation, APP_PAGES, type AppPage } from "./app-sidebar";
 import { IncomesPanel } from "./incomes-panel";
 import { NotesPanel } from "./notes-panel";
+import { TodosPanel } from "./todos-panel";
+import { SyncConflictDialog } from "./sync-conflict-dialog";
 import { saveDebtPayment, setDebtInstallmentPayment } from "@/lib/debts";
 const DebtInstallmentPaymentEditor = dynamic(() => import("@/components/debt-installment-payment-editor").then((module) => module.DebtInstallmentPaymentEditor));
 const DebtsPanel = dynamic(() => import("@/components/debts-panel").then((module) => module.DebtsPanel));
 const ImportsPanel = dynamic(() => import("@/components/imports-panel").then((module) => module.ImportsPanel));
 import {
   addExpense,
+  emptyFinanceData,
   editOccurrence,
   expensesForMonth,
   formatMoney,
@@ -117,11 +121,17 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
     filename: string;
   } | null>(null);
   const [readingBackup, setReadingBackup] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetEpoch, setResetEpoch] = useState(0);
+  const [dismissedConflict, setDismissedConflict] = useState<string | null>(null);
+  const conflictKey = finance.cache?.conflict ? JSON.stringify(finance.cache.conflict) : null;
+  const personalPage = page === "notes" || page === "todos";
   const [returnFocus, setReturnFocus] = useState<HTMLElement | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const backupButton = useRef<HTMLButtonElement>(null);
   const month = selectedMonth ?? today.slice(0, 7);
-  const disabled = !ready || busy;
+  const disabled = !ready || busy || resetting;
   const allExpenses = useMemo(
     () => expensesForMonth(data, month),
     [data, month],
@@ -290,9 +300,11 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
                   <Upload />
                   Restaurar backup
                 </DropdownMenuItem>
-              </DropdownMenuContent>
+                  <DropdownMenuSeparator />
+                <DropdownMenuItem disabled={!ready || busy || resetting} className="text-destructive" onSelect={() => setClearing(true)}><Trash2 />Limpar tudo</DropdownMenuItem>
+            </DropdownMenuContent>
             </DropdownMenu>
-            <AccountMenu account={account} enabled={cloudEnabled} busy={busy} canTransfer={ready && data.revision === 0 && finance.localAvailable} reload={finance.reload} transfer={finance.transferLocal} historyUrl={historyUrl} beforeLeave={notes.editor.flush} />
+            <AccountMenu account={account} enabled={cloudEnabled} busy={busy || resetting} canTransfer={ready && finance.cache?.base.revision === 0 && !finance.cache?.pending && finance.localAvailable} reload={async () => { await finance.sync(true); }} transfer={finance.transferLocal} historyUrl={historyUrl} beforeLeave={notes.editor.flush} syncStatus={finance.syncStatus} cache={finance.cache} syncError={error} reviewConflict={() => setDismissedConflict(null)} download={downloadJson} />
           </div>
           <input
             ref={fileInput}
@@ -307,10 +319,10 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
       <main className="shell-container workspace">
         <div className="workspace-toolbar">
           <div>
-            <span className="eyebrow">{page === "notes" ? "SUA CENTRAL PESSOAL" : "SEU CONTROLE FINANCEIRO"}</span>
+            <span className="eyebrow">{personalPage ? "SUA CENTRAL PESSOAL" : "SEU CONTROLE FINANCEIRO"}</span>
             <h1>{APP_PAGES.find((p) => p.id === page)?.label}</h1>
           </div>
-          {page !== "notes" && <div className="toolbar-actions">
+          {!personalPage && <div className="toolbar-actions">
             <div className="month-navigation">
               <Button
                 variant="ghost"
@@ -385,7 +397,7 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
             </AlertDescription>
           </Alert>
         ) : null}
-        {page !== "notes" && <section
+        {!personalPage && <section
           className="summary-grid"
           aria-label="Resumo do mês"
           aria-busy={loading}
@@ -475,7 +487,7 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
           aria-busy={loading}
         >
           {page === "notes" ? (
-            <NotesPanel {...notes} notes={data.notes} ready={ready} busy={busy} reload={finance.reload} commit={finance.commit} />
+            <NotesPanel {...notes} notes={data.notes} ready={ready} busy={busy || resetting} reload={finance.reload} commit={finance.commit} />
           ) : loading ? (
             <div className="loading-state">
               <LoaderCircle className="animate-spin" />
@@ -489,6 +501,8 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
                 Recarregue os dados ou restaure um backup pelo menu no topo.
               </p>
             </div>
+          ) : page === "todos" ? (
+            <TodosPanel key={resetEpoch} todos={data.todos} disabled={disabled} commit={finance.commit} />
           ) : page === "overview" ? (
             <AnalyticsPanel data={data} month={month} today={today} onMonthChange={changeMonth} selectCategory={selectCategory} selectKind={selectKind} onOpenUpcoming={(cardId) => { if (cardId) {setSelectedCard(cardId); setPage("cards");} else {setFilter("planned"); setPage("expenses");} }} />
           ) : page === "incomes" ? (
@@ -502,7 +516,7 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
           ) : page === "debts" ? (
             <DebtsPanel data={data} today={today} busy={busy} disabled={disabled} saveError={error} commit={finance.commit} />
           ) : page === "imports" ? (
-            <ImportsPanel data={data} today={today} busy={busy} disabled={disabled} saveError={error} commit={finance.commit} />
+            <ImportsPanel key={resetEpoch} data={data} today={today} busy={busy} disabled={disabled} saveError={error} commit={finance.commit} />
           ) : (
             <CategoriesPanel data={data} allExpenses={allExpenses} disabled={disabled} onEditCategory={(category) => setCategoryForm({category})} commit={finance.commit} />
           )}
@@ -510,7 +524,7 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
         <footer className="workspace-footer">
           <span>
             <ShieldCheck size={12} />
-            {notes.dirty ? "Notas com alterações pendentes" : busy ? "Salvando…" : error ? "Sincronização pendente" : loading ? "Carregando…" : account ? "Salvo no GitHub" : "Salvo neste navegador"}
+            {notes.dirty ? "Notas com alterações pendentes" : busy ? "Salvando…" : finance.syncStatus === "syncing" ? "Sincronizando…" : finance.cache?.conflict ? "Conflito de sincronização — revise as versões em Conta" : finance.cache?.pending && finance.cache.operation === "clear" ? "Dados limpos neste aparelho; exclusão na conta pendente" : error ? "Sincronização pendente" : loading ? "Carregando…" : finance.cache?.pending ? "Salvo neste aparelho; envio à conta pendente" : account ? "Salvo no GitHub" : "Salvo neste navegador"}
           </span>
           <span>Sua central pessoal.</span>
         </footer>
@@ -694,6 +708,7 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
                 event.preventDefault();
                 if (backup && await notes.editor.flush() && (await finance.restore(backup.data))) {
                   notes.editor.clearAfterDelete();
+                  setResetEpoch((value) => value + 1);
                   setBackup(null);
                   clearFilters();
                   setSelectedCard("");
@@ -705,6 +720,34 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AlertDialog open={clearing} onOpenChange={(open) => { if (!resetting && !busy) setClearing(open); }}><AlertDialogContent>
+        <AlertDialogHeader><AlertDialogTitle>Limpar todos os dados?</AlertDialogTitle><AlertDialogDescription>
+          Todos os meses, gastos, ganhos, cartões, dívidas, importações, categorias personalizadas, notas e tarefas serão excluídos {account ? "da conta em uso e da cópia de trabalho neste aparelho" : "deste navegador"}. As categorias iniciais serão restauradas. {account ? "Sem internet, a exclusão na conta ficará pendente. A cópia do modo visitante e o histórico do GitHub serão preservados." : ""} Exporte um backup antes se quiser guardar os dados.
+        </AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={resetting || busy}>Cancelar</AlertDialogCancel>
+          <Button variant="destructive" disabled={disabled} onClick={async () => {
+            setResetting(true);
+            await notes.editor.suspend();
+            try {
+              if (await finance.commit(() => emptyFinanceData(), "Dados limpos.", { silent: true, operation: "clear" })) {
+                notes.editor.clearAfterDelete(); setResetEpoch((value) => value + 1); setClearing(false); clearFilters(); setSelectedCard(""); setSelectedMonth(null);
+                setExpenseForm(null); setCategoryForm(null); setCardForm(null); setInstallmentPayment(null); setDeleting(null); setBackup(null); setSalaryOpen(false); setTransferMonth(null);
+                toast.success(account ? "Dados limpos neste aparelho; exclusão na conta pendente." : "Todos os dados foram limpos.");
+              } else notes.editor.resume();
+            } finally { setResetting(false); }
+          }}>{resetting ? "Limpando…" : "Confirmar limpeza"}</Button>
+        </AlertDialogFooter>
+      </AlertDialogContent></AlertDialog>
+      <SyncConflictDialog local={data} remote={finance.cache?.conflict ?? null} open={Boolean(conflictKey && dismissedConflict !== conflictKey)}
+        onOpenChange={(open) => setDismissedConflict(open ? null : conflictKey)} busy={busy || finance.syncStatus === "syncing"}
+        download={downloadJson} resolve={async (choice, reviewed) => {
+          if (choice === "local" && !await notes.editor.flush()) { toast.error("Revise o rascunho da nota antes de manter os dados deste aparelho."); return false; }
+          await notes.editor.suspend();
+          try {
+            const success = await finance.resolveConflict(choice, reviewed);
+            if (success && choice === "remote") notes.editor.clearAfterDelete();
+            return success;
+          } finally { notes.editor.resume(); }
+        }} />
       <Toaster position="bottom-right" richColors closeButton />
     </div>
   );

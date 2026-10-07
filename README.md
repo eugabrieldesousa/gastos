@@ -40,11 +40,19 @@ Acesse **http://127.0.0.1:3000**. O modo local funciona sem variáveis de ambien
 
 Sem login, os dados ficam no `localStorage`, na chave `mes.finance.v1`, exclusivos daquele navegador e endereço. Limpar os dados do navegador remove esses registros. Use backups para guardá-los.
 
-Com login, os dados são gravados como JSON em um repositório GitHub privado, exclusivo da sua conta pessoal. Cada salvamento confirmado cria um commit e atualiza a branch remota pela API do GitHub. Entre com o mesmo GitHub no celular ou computador para acessar seus lançamentos. O app atualiza ao voltar à tela, entre abas e a cada 30 segundos enquanto visível. Alterações concorrentes exigem recarregar antes de salvar. Se uma falha de rede impedir confirmar um salvamento, recarregue antes de repetir a alteração: o commit pode ter sido criado. Não há edição offline no modo conectado.
+Com login, cada alteração é salva primeiro em uma cópia de trabalho deste navegador, separada por ID de conta, e enviada para o repositório GitHub privado. O app distingue **Salvo neste aparelho** de **Salvo no GitHub**. Com o app já aberto e os dados carregados, você pode continuar editando sem internet. As pendências e rascunhos de notas sobrevivem ao recarregar e ficam vinculados à conta original ao sair; não são copiados para o modo visitante nem para outra conta. Abrir o site pela primeira vez sem internet não é suportado.
+
+Em **Conta → Atualizar dados da conta**, um único botão envia as alterações pendentes e busca as atualizações da conta. O menu mostra andamento, sucesso ou erro e a última sincronização. Também há tentativas automáticas após editar, ao recuperar a conexão, ao voltar ao app e a cada 30 segundos enquanto visível. Cada envio confirmado cria um commit. Uma resposta perdida é conferida por uma nova leitura antes de repetir o envio.
+
+Se dois aparelhos alterarem os dados, a sincronização para e preserva ambas as versões. Em **Conta → Revisar conflito**, baixe os dois backups e escolha **Manter dados deste aparelho** ou **Usar dados da conta**, com confirmação. A escolha substitui o documento inteiro, sem mesclar lançamentos automaticamente. A versão substituída fica disponível em **Conta → Backups de conflitos**; baixe-a e restaure pelo menu Backup se necessário. Uma nova mudança na conta exige nova revisão.
+
+Em **TODO**, logo abaixo de Notas, adicione, edite e exclua tarefas e marque o checkbox para concluir ou reabrir. Pendentes aparecem antes das concluídas, que permanecem visíveis com texto riscado. Cada tarefa aceita até 500 caracteres; o documento permite até 10.000 tarefas.
+
+**Backup → Limpar tudo** pede confirmação e apaga todos os meses, registros financeiros, categorias personalizadas, notas e tarefas, restaurando as categorias iniciais. Com login, afeta a conta em uso e sua cópia de trabalho; sem login, somente os dados deste navegador. A cópia independente do modo visitante, login e aparência são preservados. Sem internet, o app informa que a exclusão na conta está pendente. A limpeza segue as mesmas regras de conflito da sincronização e não apaga o histórico do GitHub.
 
 No primeiro login, se a conta ainda não tiver dados salvos, abra **Conta → Transferir dados deste navegador**. A transferência exige confirmação e mantém a cópia local. Se seus dados estavam em outro endereço (por exemplo, localhost), exporte o backup lá e restaure na conta após entrar no site. **Conta → Ver histórico no GitHub** abre os commits. Sair da conta retorna ao armazenamento local, sem copiar os dados privados da conta para ele. Tema e arquivos bancários originais continuam fora do repositório de dados.
 
-O documento e os backups usam a versão **5**. A chave antiga foi mantida para encontrar os registros existentes. A leitura e a restauração migram as versões 1–4 sem alterar valores, datas, salários, categorias, parcelas ou situações; ganhos e notas começam vazios, e a próxima gravação salva a versão 5. Os backups incluem ganhos, notas, dívidas, origens e registros de importação. O relatório para IA inclui os ganhos e projeções financeiras, sem incluir notas. Backups inválidos não substituem os dados atuais. A sincronização mantém o limite de 4 MB por documento; cada nota aceita até 120 caracteres de título e 100.000 de conteúdo.
+O documento e os backups usam a versão **6**. A chave antiga foi mantida para encontrar os registros existentes. A leitura e a restauração migram as versões 1–5 sem alterar valores, datas, salários, categorias, parcelas ou situações; tarefas começam vazias, e ganhos/notas existentes são preservados. A próxima gravação salva a versão 6. Os backups incluem tarefas, ganhos, notas, dívidas, origens e registros de importação. O relatório para IA inclui os ganhos e projeções financeiras, sem incluir notas ou tarefas. Backups inválidos não substituem os dados atuais. A sincronização mantém o limite de 4 MB por documento; cada nota aceita até 120 caracteres de título e 100.000 de conteúdo. A cópia de trabalho usa o armazenamento do navegador: falhas de quota ou permissão impedem confirmar a edição e preservam os dados anteriores.
 
 ## Verificar
 
@@ -56,13 +64,14 @@ npm run build
 npx playwright install chromium
 npm run test:e2e
 npm run test:auth
+npm run test:sync
 ```
 
 Se outra versão do app já estiver na porta 3000, use uma porta livre para os testes: no PowerShell, execute `$env:PLAYWRIGHT_PORT = '3001'` antes de `npm run test:e2e`.
 
 Os testes unitários cobrem cálculos, valores brasileiros, datas, migração, categorias, recorrências, distribuição de centavos, parcelas em andamento, quitação de faturas, dívidas, leitura de OFX/CSV/XLS/XLSX, duplicidades, lotes e falhas no armazenamento. Os testes de navegador cobrem os fluxos completos em desktop e celular, além de listas extensas em 1366×768 e 1440×900; iniciam um servidor local se necessário.
 
-Os testes da API também verificam sessão obrigatória, conta proprietária, repositório privado, origem das gravações, validação, revisões e SHA concorrentes, primeiro commit, arquivos grandes e falhas de rede. `test:auth` usa o build de produção na porta 3003 e credenciais de teste para verificar a partida do OAuth em desktop e celular; a autorização GitHub é interceptada, sem acessar os dados reais. Testes locais não substituem a verificação do OAuth e dos commits reais após configurar a Vercel.
+Os testes da API também verificam sessão obrigatória, conta proprietária, repositório privado, origem das gravações, validação, revisões e SHA concorrentes, primeiro commit, arquivos grandes e falhas de rede. `test:auth` usa o build de produção na porta 3003 e credenciais de teste para verificar a partida do OAuth em desktop e celular; a autorização GitHub é interceptada, sem acessar os dados reais. `test:sync` usa a porta 3004, uma sessão assinada exclusivamente para teste e a API financeira simulada no navegador para verificar envio, busca, feedback, edição offline, resposta perdida, limpeza e conflitos em desktop e celular. Testes locais não substituem a verificação do OAuth e dos commits reais após configurar a Vercel.
 
 ## GitHub, Vercel e salvamento entre dispositivos
 
@@ -91,7 +100,7 @@ Para desenvolvimento, use `.env.local` (veja `.env.example`) e uma **OAuth App s
 
 O servidor verifica a sessão, a privacidade do repositório e o ID imutável da conta proprietária antes de ler ou escrever. Os arquivos ficam em `data/<ID-numérico-GitHub>/finance.json`. A API não aceita escolher o usuário ou o repositório pelo corpo da solicitação. Gravações validam o documento e conferem a revisão, um checksum do estado lido pelo dispositivo e o SHA do arquivo. Isso detecta também edições diretas no GitHub que mantiveram a revisão numérica. Conflitos não são resolvidos com sobrescrita forçada. A confirmação exige que o GitHub tenha retornado o commit. Tokens ficam somente no servidor e não entram no backup ou na sessão do navegador.
 
-O formato financeiro e de backup usa a versão 5. O limite de sincronização é de 4 MB por documento; o limite de 20 MB continua valendo para arquivos bancários processados no navegador. Arquivos maiores que 1 MB são lidos pela representação raw, fixada ao mesmo commit do metadado. Excluir um gasto no app altera o arquivo atual, mas suas versões anteriores continuam no histórico Git. Arquivos inválidos são preservados e precisam ser recuperados pelo histórico do repositório antes de voltar a gravar.
+O formato financeiro e de backup usa a versão 6. O limite de sincronização é de 4 MB por documento; o limite de 20 MB continua valendo para arquivos bancários processados no navegador. Arquivos maiores que 1 MB são lidos pela representação raw, fixada ao mesmo commit do metadado. Excluir um gasto no app altera o arquivo atual, mas suas versões anteriores continuam no histórico Git. Arquivos inválidos são preservados e precisam ser recuperados pelo histórico do repositório antes de voltar a gravar.
 
 O modelo pode funcionar sem custo em **GitHub Free + Vercel Hobby**, dentro dos limites para uso pessoal e não comercial. Nenhum serviço pago ou banco é necessário. Limites de API e hospedagem continuam aplicáveis. [GitHub Free](https://docs.github.com/en/get-started/learning-about-github/githubs-plans), [Vercel Hobby](https://vercel.com/docs/plans/hobby), [limites da API GitHub](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
 
@@ -100,6 +109,7 @@ O modelo pode funcionar sem custo em **GitHub Free + Vercel Hobby**, dentro dos 
 - `src/lib/finance.ts`: tipos, validações e cálculos independentes da interface.
 - `src/lib/repository.ts`: contrato assíncrono de armazenamento e implementação local, com detecção de revisões antigas e recuperação explícita por backup.
 - `src/lib/remote-repository.ts`, `github-store.ts`, `cloud-store.ts` e `finance-api.ts`: armazenamento Git privado, validação por sessão e proteção por revisão e SHA.
+- `src/lib/account-repository.ts`: cópia de trabalho por conta, pendências offline, confirmação de envios, conflitos e backups de recuperação.
 - `src/auth.ts`: autenticação GitHub pelo Auth.js; credenciais e tokens ficam no servidor.
 - `src/hooks/use-finance.ts`: carregamento após a montagem, confirmação de gravação, sincronização entre abas e tratamento de falhas.
 - `src/components`: tela principal, formulários e lista responsiva; `ui` contém componentes adicionados pelo CLI do shadcn.

@@ -26,16 +26,16 @@ function setup(...responses: Response[]) {
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 
 describe("dados financeiros em GitHub privado", () => {
-  it("migra v3 na leitura e salva v5 com o checksum migrado e o SHA original", async () => {
+  it("migra v3 na leitura e salva v6 com o checksum migrado e o SHA original", async () => {
     const data = { ...emptyFinanceData(), revision: 8, salaries: { "2026-10": 32608 } };
-    const { balanceTransfers: _transfers, incomes: _incomes, notes: _notes, ...old } = data;
-    void _transfers; void _incomes; void _notes;
+    const { balanceTransfers: _transfers, incomes: _incomes, notes: _notes, todos: _todos, ...old } = data;
+    void _transfers; void _incomes; void _notes; void _todos;
     const legacy = { type: "file", sha: blob, encoding: "base64", content: Buffer.from(JSON.stringify({ ...old, version: 3 })).toString("base64") };
     const { store, fetcher } = setup(json(metadata), json(ref), json(legacy), json(metadata), json(ref), json(legacy), json(confirmation));
     const migrated = await store.read(user);
     expect(migrated).toEqual(data);
     const saved = await store.write(user, { ...migrated, balanceTransfers: { "2026-10": 32608 } }, 8, await financeSnapshotHash(migrated));
-    expect(saved).toMatchObject({ version: 5, revision: 9, balanceTransfers: { "2026-10": 32608 } });
+    expect(saved).toMatchObject({ version: 6, revision: 9, balanceTransfers: { "2026-10": 32608 } });
     expect(JSON.parse(fetcher.mock.calls[6][1]?.body as string).sha).toBe(blob);
   });
   it("lê a conta proprietária, fixando o arquivo ao commit da branch", async () => {

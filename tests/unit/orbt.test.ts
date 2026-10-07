@@ -22,10 +22,10 @@ describe("ganhos extras e notas", () => {
     const transferred = saveBalanceTransfer(data, "2026-10", 50000, "2026-10-07");
     expect(monthSummary({ ...transferred, salaries: { "2026-11": 0 } }, "2026-11").remaining).toBe(50000);
   });
-  it("migra v4 sem perder histórico e restaura ganhos e notas na v5", () => {
+  it("migra v4 sem perder histórico e restaura ganhos e notas na v6", () => {
     const original = { ...emptyFinanceData(), revision: 22, salaries: { "2026-10": 0 }, balanceTransfers: { "2026-09": 10000 } };
-    const { incomes: _incomes, notes: _notes, ...old } = original;
-    void _incomes; void _notes;
+    const { incomes: _incomes, notes: _notes, todos: _todos, ...old } = original;
+    void _incomes; void _notes; void _todos;
     expect(parseBackup(JSON.stringify({ ...old, version: 4 }))).toEqual(original);
     const note = { id: crypto.randomUUID(), title: "", content: "Minha ideia", createdAt: "2026-10-07T12:00:00.000Z", updatedAt: "2026-10-07T12:00:00.000Z" };
     const data = saveNote(saveIncome(original, input), note);

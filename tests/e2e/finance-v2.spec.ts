@@ -251,7 +251,7 @@ test("migração v1 e viewport com listas extensas em todas as áreas", async ({
   const stored = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("mes.finance.v1")!),
   );
-  expect(stored.version).toBe(5);
+  expect(stored.version).toBe(6);
   expect(stored.expenses).toHaveLength(71);
   expect(stored.revision).toBe(6);
 });

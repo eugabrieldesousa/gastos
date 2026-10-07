@@ -52,15 +52,15 @@ describe("sobras confirmadas", () => {
     expect(monthSummary(data, "2027-01").remaining).toBe(50000);
   });
   it("migra v2 e v3 sem inventar transferências nem alterar valores", () => {
-    const { balanceTransfers: _transfers, incomes: _incomes, notes: _notes, ...v3 } = fixture();
-    void _transfers; void _incomes; void _notes;
-    expect(parseBackup(JSON.stringify({ ...v3, version: 3 }))).toEqual({ ...v3, version: 5, balanceTransfers: {}, incomes: [], notes: [] });
+    const { balanceTransfers: _transfers, incomes: _incomes, notes: _notes, todos: _todos, ...v3 } = fixture();
+    void _transfers; void _incomes; void _notes; void _todos;
+    expect(parseBackup(JSON.stringify({ ...v3, version: 3 }))).toEqual({ ...v3, version: 6, balanceTransfers: {}, incomes: [], notes: [], todos: [] });
     const { debts: _debts, bankSources: _sources, importRecords: _records, ...v2 } = v3;
     void _debts; void _sources; void _records;
     const migrated = parseBackup(JSON.stringify({ ...v2, version: 2, expenses: v2.expenses.map(({ debtId, dueDate, ...expense }) => {
       void debtId; void dueDate; return expense;
     }) }));
-    expect(migrated.version).toBe(5);
+    expect(migrated.version).toBe(6);
     expect(migrated.balanceTransfers).toEqual({});
     expect(migrated.expenses).toEqual(v3.expenses);
   });

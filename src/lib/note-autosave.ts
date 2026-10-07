@@ -1,8 +1,11 @@
-import { saveNote, type FinanceData, type Note } from "./finance";
+import { z } from "zod";
+import { noteSchema, saveNote, type FinanceData, type Note } from "./finance";
 
 type Access = {
   getData: () => FinanceData;
   commit: (change: (data: FinanceData) => FinanceData, message: string, options?: { silent?: boolean }) => Promise<boolean>;
+  readDraft?: () => unknown;
+  writeDraft?: (draft: unknown | null) => void;
 };
 type Snapshot = {
   draft: Note | null;
@@ -20,6 +23,8 @@ export class NoteAutosave {
   private timer?: ReturnType<typeof setTimeout>;
   private saving?: Promise<boolean>;
   private generation = 0;
+  private recovered = false;
+  private suspended = false;
 
   constructor(private access: () => Access) {}
   setAccess(access: () => Access) { this.access = access; }
@@ -30,12 +35,36 @@ export class NoteAutosave {
   };
   private publish(update: Partial<Snapshot>) {
     this.state = { ...this.state, ...update };
+    try { this.access().writeDraft?.(this.state.dirty ? { version: 1, base: this.base, ...this.state } : null); }
+    catch { this.state = { ...this.state, status: this.state.status === "conflict" ? "conflict" : "error" }; }
     this.listeners.forEach((listener) => listener());
   }
+  recoverDraft() {
+    if (this.recovered) return;
+    this.recovered = true;
+    try {
+      const raw = this.access().readDraft?.();
+      if (!raw) return;
+      const saved = z.object({ version: z.literal(1), base: noteSchema.nullable(), draft: noteSchema.nullable(),
+        dirty: z.boolean(), status: z.enum(["saved", "pending", "saving", "error", "conflict"]), remote: noteSchema.nullable() }).strict().parse(raw);
+      this.base = saved.base;
+      this.publish({ draft: saved.draft, dirty: saved.dirty, status: saved.status === "conflict" ? "conflict" : "pending", remote: saved.remote });
+      this.observe(this.access().getData());
+      if (this.state.status !== "conflict") this.schedule();
+    } catch {
+      // An unreadable draft must remain available for recovery, not be removed.
+      this.state = { ...this.state, status: "error" };
+      this.listeners.forEach((listener) => listener());
+    }
+  }
+  async suspend() { this.suspended = true; this.cancelTimer(); await this.saving; }
+  resume() { this.suspended = false; if (this.state.dirty && this.state.status !== "conflict") this.schedule(); }
   private cancelTimer() { clearTimeout(this.timer); this.timer = undefined; }
   dispose() { this.cancelTimer(); }
   clearAfterDelete() {
     this.cancelTimer();
+    this.generation++;
+    this.suspended = false;
     this.base = null;
     this.publish({ draft: null, dirty: false, status: "saved", remote: null });
   }
@@ -57,10 +86,11 @@ export class NoteAutosave {
   }
   private schedule() {
     this.cancelTimer();
+    if (this.suspended) return;
     this.timer = setTimeout(() => { void this.flush(); }, 1200);
   }
   observe(data: FinanceData) {
-    if (!this.state.draft || this.saving) return;
+    if (!this.state.draft || this.saving || this.suspended) return;
     const remote = data.notes.find((note) => note.id === this.state.draft!.id) ?? null;
     if (sameNote(remote, this.base)) return;
     if (this.state.dirty || !remote) {
@@ -86,6 +116,7 @@ export class NoteAutosave {
   flush = (): Promise<boolean> => {
     this.cancelTimer();
     if (this.saving) return this.saving;
+    if (this.suspended) return Promise.resolve(true);
     if (this.state.status === "conflict") return Promise.resolve(false);
     if (!this.state.dirty) return Promise.resolve(true);
     // Start on a microtask so this.saving is assigned before commit/observers run.
@@ -96,7 +127,7 @@ export class NoteAutosave {
     return this.saving;
   };
   private async save(): Promise<boolean> {
-    while (this.state.dirty && this.state.draft) {
+    while (this.state.dirty && this.state.draft && !this.suspended) {
       const generation = this.generation;
       const base = this.base;
       const draft = this.state.draft;

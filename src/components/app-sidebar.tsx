@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { Banknote, CreditCard, FileText, LayoutDashboard, Menu, Orbit, PanelLeftClose, PanelLeftOpen, Repeat2, Tags, TrendingUp, Upload, Wallet } from "lucide-react";
+import { Banknote, CreditCard, FileText, ListTodo, LayoutDashboard, Menu, Orbit, PanelLeftClose, PanelLeftOpen, Repeat2, Tags, TrendingUp, Upload, Wallet } from "lucide-react";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 
@@ -15,6 +15,7 @@ export const APP_PAGES = [
   { id: "imports", label: "Importações", icon: Upload },
   { id: "categories", label: "Categorias", icon: Tags },
   { id: "notes", label: "Notas", icon: FileText },
+  { id: "todos", label: "TODO", icon: ListTodo },
 ] as const;
 export type AppPage = (typeof APP_PAGES)[number]["id"];
 const SIDEBAR_KEY = "orbt.sidebar.collapsed";
@@ -27,9 +28,10 @@ function subscribeSidebar(listener: () => void) {
 function Navigation({ page, navigate }: { page: AppPage; navigate: (page: AppPage) => void }) {
   return <nav aria-label="Seções do sistema" className="sidebar-navigation">
     <span className="sidebar-group-label">Finanças</span>
-    {APP_PAGES.filter((item) => item.id !== "notes").map((item) => <button key={item.id} aria-label={item.label} title={item.label} aria-current={page === item.id ? "page" : undefined} onClick={() => navigate(item.id)}><item.icon size={19} aria-hidden="true" /><span>{item.label}</span></button>)}
+    {APP_PAGES.filter((item) => item.id !== "notes" && item.id !== "todos").map((item) => <button key={item.id} aria-label={item.label} title={item.label} aria-current={page === item.id ? "page" : undefined} onClick={() => navigate(item.id)}><item.icon size={19} aria-hidden="true" /><span>{item.label}</span></button>)}
     <div className="sidebar-divider" />
     <button aria-label="Notas" title="Notas" aria-current={page === "notes" ? "page" : undefined} onClick={() => navigate("notes")}><FileText size={19} aria-hidden="true" /><span>Notas</span></button>
+    <button aria-label="TODO" title="TODO" aria-current={page === "todos" ? "page" : undefined} onClick={() => navigate("todos")}><ListTodo size={19} aria-hidden="true" /><span>TODO</span></button>
   </nav>;
 }
 

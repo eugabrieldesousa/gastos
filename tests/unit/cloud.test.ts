@@ -39,7 +39,7 @@ describe("API financeira autenticada", () => {
     const note = { id: crypto.randomUUID(), title: "Freelas", content: "Contato do cliente", createdAt: "2026-10-07T12:00:00.000Z", updatedAt: "2026-10-07T12:00:00.000Z" };
     const data = saveNote(saveIncome(initial, { description: "Freela", amountCents: 50000, date: "2026-10-07", status: "received" }), note);
     const saved = await repository.write(data, initial.revision);
-    expect(saved).toMatchObject({ version: 5, revision: 1, notes: [note], incomes: data.incomes });
+    expect(saved).toMatchObject({ version: 6, revision: 1, notes: [note], incomes: data.incomes });
     expect(await repository.read()).toEqual(saved);
     expect((await db.read("github:200")).notes).toEqual([]);
     expect((await db.read("github:200")).incomes).toEqual([]);

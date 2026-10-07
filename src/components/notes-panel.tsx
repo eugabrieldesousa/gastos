@@ -48,8 +48,8 @@ export function NotesPanel({ notes, editor, draft, status, remote, ready, busy, 
           </div>}
         </div>}
         <div className="note-fields">
-          <Label htmlFor="note-title">Título</Label><Input id="note-title" placeholder="Sem título" maxLength={120} value={draft.title} onChange={(event) => editor.edit({ title: event.target.value })} />
-          <Label htmlFor="note-content">Conteúdo</Label><textarea id="note-content" placeholder="Escreva sua nota…" maxLength={100000} value={draft.content} onChange={(event) => editor.edit({ content: event.target.value })} />
+          <Label htmlFor="note-title">Título</Label><Input id="note-title" placeholder="Sem título" maxLength={120} disabled={busy} value={draft.title} onChange={(event) => editor.edit({ title: event.target.value })} />
+          <Label htmlFor="note-content">Conteúdo</Label><textarea id="note-content" placeholder="Escreva sua nota…" maxLength={100000} disabled={busy} value={draft.content} onChange={(event) => editor.edit({ content: event.target.value })} />
           <small>Salvamento automático após uma pausa na digitação.</small>
         </div>
       </> : <div className="empty-state"><FileText /><h2>Um espaço para suas ideias</h2><p>Selecione uma nota ou crie uma nova.</p><Button disabled={!ready || busy} onClick={() => void create()}><Plus />Criar nota</Button></div>}

@@ -439,7 +439,7 @@ export const noteSchema = z.object({
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 }).strict().refine((note) => note.updatedAt >= note.createdAt, "Data de alteração inválida.");
-export const financeSchema = financeV4Object.extend({
+const financeV5Schema = financeV4Object.extend({
   version: z.literal(5),
   incomes: z.array(incomeSchema).max(10000),
   notes: z.array(noteSchema).max(1000),
@@ -449,6 +449,25 @@ export const financeSchema = financeV4Object.extend({
       ctx.addIssue({ code: "custom", message: "Os dados contêm identificadores duplicados." });
   }
 });
+export const todoSchema = z.object({
+  id: z.string().uuid(),
+  text: z.string().trim().min(1).max(500),
+  completed: z.boolean(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+}).strict().refine((todo) => todo.updatedAt >= todo.createdAt, "Data de alteração inválida.");
+export const financeSchema = financeV4Object.extend({
+  version: z.literal(6),
+  incomes: z.array(incomeSchema).max(10000),
+  notes: z.array(noteSchema).max(1000),
+  todos: z.array(todoSchema).max(10000),
+}).superRefine(validateCore).superRefine(validateV3).superRefine((data, ctx) => {
+  for (const collection of [data.incomes, data.notes, data.todos]) {
+    if (new Set(collection.map((item) => item.id)).size !== collection.length)
+      ctx.addIssue({ code: "custom", message: "Os dados contêm identificadores duplicados." });
+  }
+});
+export type Todo = z.infer<typeof todoSchema>;
 export type Income = z.infer<typeof incomeSchema>;
 export type Note = z.infer<typeof noteSchema>;
 export type Debt = z.infer<typeof debtSchema>;
@@ -477,12 +496,13 @@ export type ExpenseFilter = "all" | Expense["status"];
 
 export function emptyFinanceData(): FinanceData {
   return {
-    version: 5,
+    version: 6,
     revision: 0,
     salaries: {},
     balanceTransfers: {},
     incomes: [],
     notes: [],
+    todos: [],
     expenses: [],
     categories: CATEGORIES.map((name, index) => ({
       id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
@@ -716,15 +736,19 @@ export function parseFinanceData(value: unknown): FinanceData {
   }
   if (typeof value === "object" && value !== null && "version" in value && value.version === 2) {
     const old = financeV2Schema.parse(value);
-    return financeSchema.parse({ ...old, version: 5, incomes: [], notes: [], balanceTransfers: {}, expenses: old.expenses.map((e) => expenseSchema.parse(e)), debts: [], bankSources: [], importRecords: [] });
+    return financeSchema.parse({ ...old, version: 6, incomes: [], notes: [], todos: [], balanceTransfers: {}, expenses: old.expenses.map((e) => expenseSchema.parse(e)), debts: [], bankSources: [], importRecords: [] });
   }
   if (typeof value === "object" && value !== null && "version" in value && value.version === 3) {
     const old = financeV3Schema.parse(value);
-    return financeSchema.parse({ ...old, version: 5, incomes: [], notes: [], balanceTransfers: {} });
+    return financeSchema.parse({ ...old, version: 6, incomes: [], notes: [], todos: [], balanceTransfers: {} });
   }
   if (typeof value === "object" && value !== null && "version" in value && value.version === 4) {
     const old = financeV4Schema.parse(value);
-    return financeSchema.parse({ ...old, version: 5, incomes: [], notes: [] });
+    return financeSchema.parse({ ...old, version: 6, incomes: [], notes: [], todos: [] });
+  }
+  if (typeof value === "object" && value !== null && "version" in value && value.version === 5) {
+    const old = financeV5Schema.parse(value);
+    return financeSchema.parse({ ...old, version: 6, todos: [] });
   }
   return financeSchema.parse(value);
 }

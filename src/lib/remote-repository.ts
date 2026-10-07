@@ -12,7 +12,7 @@ export class RemoteFinanceRepository implements FinanceRepository {
     const generation = ++this.generation;
     let response: Response;
     try {
-      response = await this.fetcher("/api/finance", { ...init, cache: "no-store", credentials: "same-origin" });
+      response = await this.fetcher("/api/finance", { ...init, signal: AbortSignal.timeout(20_000), cache: "no-store", credentials: "same-origin" });
     } catch {
       throw new Error(init?.method === "PUT"
         ? "Não foi possível confirmar o salvamento no GitHub. Verifique a internet e recarregue os dados antes de tentar novamente."
