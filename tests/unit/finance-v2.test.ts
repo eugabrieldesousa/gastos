@@ -54,7 +54,7 @@ describe("migração e categorias", () => {
       ],
     };
     const data = parseBackup(JSON.stringify(old));
-    expect(data.version).toBe(3);
+    expect(data.version).toBe(4);
     expect(data.revision).toBe(8);
     expect(data.salaries).toEqual(old.salaries);
     expect(data.expenses[0]).toMatchObject({

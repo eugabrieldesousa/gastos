@@ -83,7 +83,7 @@ test("lista de custos recolhível, inclusão, edição, exclusão, pagamentos e 
   await expect(card.locator(".debt-metrics")).toContainText("2.000,00");
   await page.getByRole("button", { name: "Backup", exact: true }).click();
   const download = page.waitForEvent("download");
-  await page.getByRole("menuitem", { name: /Exportar/ }).click();
+  await page.getByRole("menuitem", { name: "Exportar backup", exact: true }).click();
   const file = await (await download).path();
   const { readFile } = await import("node:fs/promises");
   const backup = JSON.parse(await readFile(file!, "utf8"));

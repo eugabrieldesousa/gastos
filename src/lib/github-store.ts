@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { emptyFinanceData, financeSchema, type FinanceData } from "./finance";
+import { emptyFinanceData, financeSchema, parseFinanceData, type FinanceData } from "./finance";
 import { CloudStoreError, type CloudStore } from "./cloud-store";
 import { StorageConflictError } from "./repository";
 import { financeSnapshotHash } from "./finance-snapshot";
@@ -72,7 +72,7 @@ export class GitHubFinanceStore implements CloudStore {
       raw = await rawResponse.text();
     } else { throw unavailable(); }
     try {
-      return { data: financeSchema.parse(JSON.parse(raw)), sha: file.sha, endpoint, branch };
+      return { data: parseFinanceData(JSON.parse(raw)), sha: file.sha, endpoint, branch };
     } catch {
       throw new CloudStoreError("O arquivo de dados do GitHub está inválido e foi preservado. Recupere uma versão válida no histórico do repositório e recarregue.");
     }

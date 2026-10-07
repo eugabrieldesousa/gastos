@@ -73,10 +73,10 @@ describe("dívidas sem juros", () => {
     data = saveCategory(data, { ...category, name: "Veículos" }, category.id);
     expect(data.debts[0].category).toBe("Veículos");
     expect(parseBackup(JSON.stringify(data))).toEqual(data);
-    const { debts: _debts, bankSources: _sources, importRecords: _records, ...old } = emptyFinanceData();
-    void _debts; void _sources; void _records;
+    const { debts: _debts, bankSources: _sources, importRecords: _records, balanceTransfers: _transfers, ...old } = emptyFinanceData();
+    void _debts; void _sources; void _records; void _transfers;
     const migrated = parseBackup(JSON.stringify({ ...old, version: 2, revision: 12, salaries: { "2026-10": 0 } }));
-    expect(migrated).toMatchObject({ version: 3, revision: 12, debts: [], bankSources: [], importRecords: [], salaries: { "2026-10": 0 } });
+    expect(migrated).toMatchObject({ version: 4, revision: 12, debts: [], bankSources: [], importRecords: [], salaries: { "2026-10": 0 } });
     expect(financeSchema.safeParse({ ...data, debts: [...data.debts, data.debts[0]] }).success).toBe(false);
   });
 });
@@ -152,9 +152,11 @@ describe("dívidas por custos", () => {
     const data = create();
     const { type: _type, costs: _costs, description: _description, installmentPlanId: _plan, ...old } = data.debts[0];
     void _type; void _costs; void _description; void _plan;
-    const migrated = parseBackup(JSON.stringify({ ...data, debts: [old] }));
+    const { balanceTransfers: _transfers, ...oldData } = data;
+    void _transfers;
+    const migrated = parseBackup(JSON.stringify({ ...oldData, version: 3, debts: [old] }));
     expect(migrated.debts[0]).toEqual({ ...old, type: "fixed", description: "", costs: [], installmentPlanId: null });
-    expect(migrated.version).toBe(3);
+    expect(migrated.version).toBe(4);
     expect(migrated.expenses).toEqual(data.expenses);
     expect(debtSummary(migrated, migrated.debts[0], today)).toEqual(debtSummary(data, data.debts[0], today));
   });

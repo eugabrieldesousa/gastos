@@ -136,10 +136,14 @@ test("temas mantêm contraste, gráficos legíveis e rolagem em painéis e modai
   await ready(page);
   for (const label of ["Claro", "Escuro"] as const) {
     await chooseTheme(page, label);
+    await page.getByRole("button", { name: "Gastos", exact: true }).click();
     const ratios = await contrast(page, [".summary-label", ".summary-value", ".summary-caption", ".quiet-label", ".chart-legend span", ".chart-legend small", ".expense-description strong", ".expense-description small", ".expense-status", ".workspace-footer", ".theme-button", ".backup-button"]);
     expect(ratios.length).toBeGreaterThan(15);
     for (const pair of ratios) expect(pair.ratio, JSON.stringify(pair)).toBeGreaterThanOrEqual(4.5);
-    for (const pair of await contrast(page, [".donut .data-color"], "stroke")) expect(pair.ratio, JSON.stringify(pair)).toBeGreaterThanOrEqual(3);
+    await page.getByRole("button", { name: "Dashboard", exact: true }).click();
+    const charts = await contrast(page, [".donut .data-color"], "stroke");
+    expect(charts.length).toBeGreaterThan(0);
+    for (const pair of charts) expect(pair.ratio, JSON.stringify(pair)).toBeGreaterThanOrEqual(3);
     await page.screenshot({ path: testInfo.outputPath(`overview-${label}.png`) });
     await page.getByRole("button", { name: "Adicionar gasto", exact: true }).click();
     for (const pair of await contrast(page, ['[role="dialog"] [data-slot="input"]'], "border")) expect(pair.ratio, JSON.stringify(pair)).toBeGreaterThanOrEqual(3);
@@ -161,7 +165,7 @@ test("temas mantêm contraste, gráficos legíveis e rolagem em painéis e modai
   await page.getByRole("button", { name: "Adicionar gasto", exact: true }).click();
   expect(await page.getByRole("dialog").evaluate((el) => getComputedStyle(el, "::-webkit-scrollbar").width)).toBe("12px");
   await page.setViewportSize({ width: testInfo.project.name === "mobile" ? 390 : 1440, height: 420 });
-  expect(await page.getByRole("dialog").evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  await expect.poll(() => page.getByRole("dialog").evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
   await page.getByRole("dialog").evaluate((el) => { el.scrollTop = el.scrollHeight; });
   expect(await page.getByRole("dialog").evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
   await page.emulateMedia({ forcedColors: "active" });

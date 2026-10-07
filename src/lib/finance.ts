@@ -338,13 +338,14 @@ function validateCore(data: Omit<z.infer<typeof financeV2Object>, "version" | "e
     }
 }
 const financeV2Schema = financeV2Object.superRefine(validateCore);
-export const financeSchema = financeV2Object.extend({
+const financeV3Object = financeV2Object.extend({
   version: z.literal(3),
   expenses: z.array(expenseSchema).max(100000),
   debts: z.array(debtSchema).max(10000),
   bankSources: z.array(bankSourceSchema).max(200),
   importRecords: z.array(importRecordSchema).max(100000),
-}).superRefine(validateCore).superRefine((data, ctx) => {
+});
+function validateV3(data: Omit<z.infer<typeof financeV3Object>, "version">, ctx: z.RefinementCtx) {
   const issue = (message: string) => ctx.addIssue({ code: "custom", message });
   for (const list of [data.debts, data.bankSources, data.importRecords]) {
     if (new Set(list.map((v) => v.id)).size !== list.length) issue("Registros duplicados.");
@@ -417,7 +418,12 @@ export const financeSchema = financeV2Object.extend({
     if (["create", "link", "debt"].includes(record.action) && !record.expenseId) issue("O registro importado deve identificar o gasto vinculado.");
     if (record.action === "invoice" && (!record.cardId || !record.invoiceMonth)) issue("O pagamento importado deve identificar a fatura.");
   }
-});
+}
+const financeV3Schema = financeV3Object.superRefine(validateCore).superRefine(validateV3);
+export const financeSchema = financeV3Object.extend({
+  version: z.literal(4),
+  balanceTransfers: z.record(monthSchema.refine((month) => month < "9999-12", "O destino deve existir no calendário."), centsSchema.refine((amount) => amount > 0)),
+}).superRefine(validateCore).superRefine(validateV3);
 export type Debt = z.infer<typeof debtSchema>;
 export type DebtInput = Omit<z.input<typeof debtSchema>, "id">;
 export type DebtCost = z.infer<typeof debtCostSchema>;
@@ -444,9 +450,10 @@ export type ExpenseFilter = "all" | Expense["status"];
 
 export function emptyFinanceData(): FinanceData {
   return {
-    version: 3,
+    version: 4,
     revision: 0,
     salaries: {},
+    balanceTransfers: {},
     expenses: [],
     categories: CATEGORIES.map((name, index) => ({
       id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
@@ -593,13 +600,33 @@ export function monthSummary(data: FinanceData, month: string) {
       total + (expense.status === "planned" ? expense.amountCents : 0),
     0,
   );
+  const received = month && month > "1000-01" ? data.balanceTransfers[shiftMonth(month, -1)] ?? 0 : 0;
+  const ownRemaining = salary === null ? null : salary - paid - planned;
   return {
     salary,
     paid,
     planned,
     total: paid + planned,
-    remaining: salary === null ? null : salary - paid - planned,
+    received,
+    ownRemaining,
+    transferred: data.balanceTransfers[month] ?? 0,
+    remaining: ownRemaining === null ? null : ownRemaining + received,
   };
+}
+
+/** Confirmed transfers are independent of subsequent changes in the source month. */
+export function saveBalanceTransfer(data: FinanceData, month: string, amount: number | null, today = localToday()): FinanceData {
+  if (!monthSchema.safeParse(month).success || month >= "9999-12" || month >= today.slice(0, 7))
+    throw new Error("Selecione um mês anterior ao atual.");
+  const balanceTransfers = { ...data.balanceTransfers };
+  if (amount === null) delete balanceTransfers[month];
+  else {
+    const available = monthSummary(data, month).remaining;
+    if (!Number.isSafeInteger(amount) || amount <= 0 || amount > MAX_CENTS || available === null || amount > available)
+      throw new Error("Informe um valor positivo que não ultrapasse a sobra disponível.");
+    balanceTransfers[month] = amount;
+  }
+  return financeSchema.parse({ ...data, balanceTransfers });
 }
 
 export function saveExpense(
@@ -653,7 +680,11 @@ export function parseFinanceData(value: unknown): FinanceData {
   }
   if (typeof value === "object" && value !== null && "version" in value && value.version === 2) {
     const old = financeV2Schema.parse(value);
-    return financeSchema.parse({ ...old, version: 3, expenses: old.expenses.map((e) => expenseSchema.parse(e)), debts: [], bankSources: [], importRecords: [] });
+    return financeSchema.parse({ ...old, version: 4, balanceTransfers: {}, expenses: old.expenses.map((e) => expenseSchema.parse(e)), debts: [], bankSources: [], importRecords: [] });
+  }
+  if (typeof value === "object" && value !== null && "version" in value && value.version === 3) {
+    const old = financeV3Schema.parse(value);
+    return financeSchema.parse({ ...old, version: 4, balanceTransfers: {} });
   }
   return financeSchema.parse(value);
 }
@@ -1094,12 +1125,15 @@ export function installmentSummaries(data: FinanceData, month: string) {
     if (!items.length) return [];
     const current = items.find((e) => e.date.slice(0, 7) === month);
     const pending = items.filter((e) => e.status === "planned");
+    const position = current?.installmentNumber ?? (month < plan.firstMonth ? 0 : Math.max(plan.firstInstallment - 1, ...items.filter((e) => e.date.slice(0, 7) <= month).map((e) => e.installmentNumber ?? 0)));
     return [
       {
         ...plan,
         description: items[0].description,
         items,
         current,
+        position,
+        progressPercent: (position / plan.totalInstallments) * 100,
         paidCount: items.filter((e) => e.status === "paid").length,
         pendingCount: pending.length,
         remaining: pending.reduce((sum, e) => sum + e.amountCents, 0),

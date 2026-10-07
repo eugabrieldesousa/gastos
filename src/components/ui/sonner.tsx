@@ -39,8 +39,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--warning-text": "var(--warning)",
           "--warning-border": "var(--warning)",
           "--info-bg": "var(--card)",
-          "--info-text": "var(--foreground)",
-          "--info-border": "var(--input)",
+          "--info-text": "var(--info)",
+          "--info-border": "var(--info)",
           "--border-radius": "var(--radius)",
         } as React.CSSProperties
       }

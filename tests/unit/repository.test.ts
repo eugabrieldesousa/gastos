@@ -71,7 +71,7 @@ describe("persistência local", () => {
     });
     await expect(blocked.read()).rejects.toThrow("armazenamento");
   });
-  it("migra v1 na leitura e grava v3 sem perder a revisão", async () => {
+  it("migra v1 na leitura e grava v4 sem perder a revisão", async () => {
     const original = JSON.stringify({
       version: 1,
       revision: 12,
@@ -80,12 +80,12 @@ describe("persistência local", () => {
     });
     items.set(STORAGE_KEY, original);
     const migrated = await repository.read();
-    expect(migrated.version).toBe(3);
+    expect(migrated.version).toBe(4);
     expect(migrated.revision).toBe(12);
     expect(items.get(STORAGE_KEY)).toBe(original);
     await repository.write(migrated, 12);
     const saved = JSON.parse(items.get(STORAGE_KEY)!);
-    expect(saved.version).toBe(3);
+    expect(saved.version).toBe(4);
     expect(saved.revision).toBe(13);
     expect(saved.salaries).toEqual({ "2026-10": 300000 });
   });

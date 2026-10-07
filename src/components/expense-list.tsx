@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import {
   Armchair,
+  AlertCircle,
   Banknote,
   BriefcaseBusiness,
   Bus,
@@ -66,11 +67,12 @@ export function CategoryMark({ category }: { category?: Category }) {
     </span>
   );
 }
-type Props = {
+export type ExpenseListProps = {
   expenses: Expense[];
   categories: Category[];
   hasExpenses: boolean;
   disabled: boolean;
+  today?: string;
   onEdit: (expense: Expense) => void;
   onDelete: (expense: Expense) => void;
   onToggle: (expense: Expense) => void;
@@ -81,11 +83,12 @@ export function ExpenseList({
   categories,
   hasExpenses,
   disabled,
+  today = "",
   onEdit,
   onDelete,
   onToggle,
   onAdd,
-}: Props) {
+}: ExpenseListProps) {
   if (!expenses.length)
     return (
       <div className="empty-state">
@@ -120,7 +123,11 @@ export function ExpenseList({
           Ações
         </span>
       </div>
-      {expenses.map((expense) => (
+      {expenses.map((expense) => {
+        const overdue = expense.status === "planned" && (expense.dueDate ?? expense.date) < today;
+        const statusClass = expense.status === "paid" ? "is-paid" : overdue ? "is-overdue" : "is-planned";
+        const statusLabel = expense.status === "paid" ? "Pago" : overdue ? "Em atraso" : "Previsto";
+        return (
         <div
           key={expense.id}
           className="expense-item"
@@ -149,21 +156,21 @@ export function ExpenseList({
           </span>
           <span
             role="cell"
-            className={`expense-status ${expense.status === "paid" ? "is-paid" : "is-planned"}`}
+            className={`expense-status ${statusClass}`}
           >
             {expense.status === "paid" ? (
               <Check size={12} />
-            ) : (
+            ) : overdue ? <AlertCircle size={12} /> : (
               <Clock3 size={12} />
             )}
-            {expense.status === "paid" ? "Pago" : "Previsto"}
+            {statusLabel}
           </span>
           <div className="expense-amount" role="cell">
             <strong>{formatMoney(expense.amountCents)}</strong>
             <span
-              className={`expense-mobile-status ${expense.status === "paid" ? "is-paid" : "is-planned"}`}
+              className={`expense-mobile-status ${statusClass}`}
             >
-              {expense.status === "paid" ? "Pago" : "Previsto"} ·{" "}
+              {statusLabel} ·{" "}
               {dateLabel(expense.date)}
             </span>
           </div>
@@ -216,7 +223,7 @@ export function ExpenseList({
             </DropdownMenu>
           </div>
         </div>
-      ))}
+      );})}
     </div>
   );
 }

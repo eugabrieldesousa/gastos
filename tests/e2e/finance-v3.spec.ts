@@ -71,7 +71,7 @@ test("dívida com entrada, pagamentos variáveis, média, edição, exclusão e 
   await expect(page.locator(".debt-card")).toContainText("600,00");
   await page.getByRole("button", { name: "Backup" }).click();
   const download = page.waitForEvent("download");
-  await page.getByRole("menuitem", { name: /Exportar/ }).click();
+  await page.getByRole("menuitem", { name: "Exportar backup", exact: true }).click();
   expect((await download).suggestedFilename()).toMatch(/mes-backup/);
   expect(errors).toEqual([]);
   const width = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, viewport: innerWidth }));
@@ -96,7 +96,7 @@ test("CSV revisável, Pix para dívida, arquivo renomeado e transação igual le
   await page.getByRole("button", { name: "Salvar importação", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Revise antes de importar" })).toHaveCount(0);
   const first = await readData(page);
-  expect(first.version).toBe(3); expect(first.expenses).toHaveLength(2); expect(first.importRecords).toHaveLength(3);
+  expect(first.version).toBe(4); expect(first.expenses).toHaveLength(2); expect(first.importRecords).toHaveLength(3);
   expect(first.expenses.find((e) => e.debtId)?.amountCents).toBe(20000);
   await nav(page, "Dívidas");
   await expect(page.locator(".debt-card")).toContainText("500,00");

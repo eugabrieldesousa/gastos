@@ -117,7 +117,7 @@ test("cartão, compras fixas, parcelas novas e em andamento, quitação e persis
   await expect(
     page.getByText("3 anteriores: histórico informado"),
   ).toBeVisible();
-  await expect(page.getByText("0 quitadas · 7 pendentes")).toBeVisible();
+  await expect(page.getByText("0 pagas registradas · 7 pendentes")).toBeVisible();
   await page.getByRole("button", { name: "Ver parcelas" }).last().click();
   await expect(
     page.getByRole("button", { name: "Ações para Seguro parcelado" }),
@@ -147,7 +147,7 @@ test("categorias personalizadas, gráfico interativo, arquivamento e recorrênci
     kind: "fixed",
     category: "Estudos",
   });
-  await nav(page, "Visão geral");
+  await nav(page, "Dashboard");
   await page
     .getByRole("button", { name: "Ver gastos: Estudos", exact: true })
     .click();
@@ -211,7 +211,7 @@ test("migração v1 e viewport com listas extensas em todas as áreas", async ({
   for (const size of sizes) {
     await page.setViewportSize(size);
     for (const name of [
-      "Visão geral",
+      "Dashboard",
       "Gastos",
       "Cartões e faturas",
       "Parcelamentos",
@@ -246,7 +246,7 @@ test("migração v1 e viewport com listas extensas em todas as áreas", async ({
         exact: true,
       }),
     ).toBeVisible();
-    await nav(page, "Visão geral");
+    await nav(page, "Dashboard");
     await page.screenshot({
       path: `.artifacts/${testInfo.project.name}-${size.width}-v2-overview.png`,
     });
@@ -255,7 +255,7 @@ test("migração v1 e viewport com listas extensas em todas as áreas", async ({
   const stored = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("mes.finance.v1")!),
   );
-  expect(stored.version).toBe(3);
+  expect(stored.version).toBe(4);
   expect(stored.expenses).toHaveLength(71);
   expect(stored.revision).toBe(6);
 });

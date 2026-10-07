@@ -4,12 +4,9 @@ import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
-  Archive,
   ArrowDownLeft,
   ArrowUpRight,
   Banknote,
-  ChartPie,
-  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -23,17 +20,14 @@ import {
   Plus,
   RefreshCw,
   Repeat2,
-  Search,
   ShieldCheck,
   Sparkles,
   Tags,
   Upload,
   Wallet,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -55,31 +49,29 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeMenu } from "@/components/theme-menu";
 import { AccountMenu, type FinanceAccount } from "@/components/account-menu";
-import { SalaryDialog } from "@/components/finance-dialogs";
+import { BalanceTransferDialog, SalaryDialog } from "@/components/finance-dialogs";
+import { financialReport } from "@/lib/finance-report";
 import {
   CardEditor,
   CategoryEditor,
   ExpenseEditor,
   NativeSelect,
 } from "@/components/finance-editor";
-import { CategoryMark, ExpenseList } from "@/components/expense-list";
-import { FinanceChart } from "@/components/finance-chart";
+import { AnalyticsPanel } from "@/components/analytics-panel";
+import { ExpensesPanel } from "@/components/expenses-panel";
+import { CardsPanel } from "@/components/cards-panel";
+import { InstallmentsPanel } from "@/components/installments-panel";
+import { CategoriesPanel } from "@/components/categories-panel";
 import { useFinance } from "@/hooks/use-finance";
 import { saveDebtPayment, setDebtInstallmentPayment } from "@/lib/debts";
 const DebtInstallmentPaymentEditor = dynamic(() => import("@/components/debt-installment-payment-editor").then((module) => module.DebtInstallmentPaymentEditor));
 const DebtsPanel = dynamic(() => import("@/components/debts-panel").then((module) => module.DebtsPanel));
 const ImportsPanel = dynamic(() => import("@/components/imports-panel").then((module) => module.ImportsPanel));
 import {
-  KIND_LABELS,
   addExpense,
-  dateLabel,
   editOccurrence,
-  ensureInvoice,
   expensesForMonth,
   formatMoney,
-  groupExpenses,
-  installmentSummaries,
-  invoiceSummary,
   monthLabel,
   monthSummary,
   parseBackup,
@@ -87,7 +79,7 @@ import {
   saveCard,
   saveCategory,
   saveExpense,
-  setInvoicePaid,
+  saveBalanceTransfer,
   shiftMonth,
   type Category,
   type CreditCard,
@@ -98,7 +90,7 @@ import {
 } from "@/lib/finance";
 
 const pages = [
-  { id: "overview", label: "Visão geral", icon: LayoutDashboard },
+  { id: "overview", label: "Dashboard", icon: LayoutDashboard },
   { id: "expenses", label: "Gastos", icon: Wallet },
   { id: "cards", label: "Cartões e faturas", icon: CardIcon },
   { id: "installments", label: "Parcelamentos", icon: Repeat2 },
@@ -112,12 +104,12 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
   const finance = useFinance(account?.id);
   const { data, loading, ready, busy, error, today } = finance;
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
-  const [page, setPage] = useState<PageName>("overview");
+  const [page, setPage] = useState<PageName>("expenses");
   const [filter, setFilter] = useState<ExpenseFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [kindFilter, setKindFilter] = useState("");
-  const [search, setSearch] = useState("");
   const [salaryOpen, setSalaryOpen] = useState(false);
+  const [transferMonth, setTransferMonth] = useState<string | null>(null);
   const [expenseForm, setExpenseForm] = useState<{
     expense: Expense | null;
     cardId?: string;
@@ -130,7 +122,6 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
     null,
   );
   const [selectedCard, setSelectedCard] = useState("");
-  const [expandedPlan, setExpandedPlan] = useState("");
   const [deleting, setDeleting] = useState<Expense | null>(null);
   const [deleteScope, setDeleteScope] = useState<"one" | "future">("one");
   const [backup, setBackup] = useState<{
@@ -148,74 +139,11 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
     [data, month],
   );
   const summary = useMemo(() => monthSummary(data, month), [data, month]);
-  const categoryGroups = useMemo(
-    () => groupExpenses(allExpenses, "category"),
-    [allExpenses],
-  );
-  const kindGroups = useMemo(
-    () => groupExpenses(allExpenses, "kind"),
-    [allExpenses],
-  );
-  const filtered = allExpenses.filter(
-    (e) =>
-      (filter === "all" || e.status === filter) &&
-      (!categoryFilter || e.category === categoryFilter) &&
-      (!kindFilter || e.kind === kindFilter) &&
-      e.description
-        .toLocaleLowerCase("pt-BR")
-        .includes(search.toLocaleLowerCase("pt-BR")),
-  );
-  const card = data.cards.find((c) => c.id === selectedCard) ?? data.cards[0];
-  const invoice = card && month ? invoiceSummary(data, card.id, month) : null;
-  const plans = useMemo(() => installmentSummaries(data, month), [data, month]);
-  const forecasts = useMemo(
-    () =>
-      month
-        ? Array.from({ length: 6 }, (_, i) => shiftMonth(month, i + 1))
-            .filter((m) => /^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(m))
-            .map((m) => ({ month: m, summary: monthSummary(data, m) }))
-        : [],
-    [data, month],
-  );
-  const previousMonth = month && month > "1000-01" ? shiftMonth(month, -1) : "";
-  const previous = monthSummary(data, previousMonth);
-  const hasPrevious = expensesForMonth(data, previousMonth).length > 0;
-  const upcoming = useMemo(() => {
-    if (!month) return [];
-    const months = month < "9999-12" ? [month, shiftMonth(month, 1)] : [month];
-    return months
-      .flatMap((m) => {
-        const direct = expensesForMonth(data, m)
-          .filter((e) => !e.cardId && e.status === "planned")
-          .map((e) => ({
-            id: e.id,
-            description: e.description,
-            date: e.date,
-            amount: e.amountCents,
-            month: m,
-            cardId: null as string | null,
-          }));
-        const invoices = data.cards
-          .map((c) => ({ ...invoiceSummary(data, c.id, m), name: c.name }))
-          .filter((i) => !i.paid && i.total > 0)
-          .map((i) => ({
-            id: `${i.cardId}:${m}`,
-            description: `Fatura · ${i.name}`,
-            date: i.dueDate,
-            amount: i.total,
-            month: m,
-            cardId: i.cardId,
-          }));
-        return [...direct, ...invoices];
-      })
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }, [data, month]);
 
   function clearFilters() {
     setFilter("all");
     setCategoryFilter("");
     setKindFilter("");
-    setSearch("");
   }
   function changeMonth(value: string) {
     setSelectedMonth(value);
@@ -242,16 +170,23 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
     setKindFilter(kind);
     setPage("expenses");
   }
-  function exportBackup() {
+  function downloadJson(value: unknown, filename: string) {
     const url = URL.createObjectURL(
-      new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+      new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }),
     );
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `mes-backup-${today}.json`;
+    anchor.download = filename;
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function exportBackup() {
+    downloadJson(data, `mes-backup-${today}.json`);
     toast.success("Backup exportado.");
+  }
+  function exportReport() {
+    downloadJson(financialReport(data, month, today), `mes-relatorio-ia-${today}.json`);
+    toast.success("Relatório para IA exportado.");
   }
   async function readBackup(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -274,6 +209,7 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
     }
   }
   const listProps = {
+    today,
     categories: data.categories,
     disabled,
     onAdd: () => openExpense(),
@@ -340,6 +276,10 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
                 <DropdownMenuItem disabled={!ready} onSelect={exportBackup}>
                   <Download />
                   Exportar backup
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!ready} onSelect={exportReport}>
+                  <Sparkles />
+                  Exportar relatório para IA
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
@@ -511,9 +451,21 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
               {summary.remaining === null
                 ? "Informe o salário para calcular"
                 : summary.remaining < 0
-                  ? "Os gastos ultrapassam o salário"
+                  ? "Os gastos ultrapassam o saldo disponível"
                   : "Depois de todos os gastos"}
             </span>
+            {summary.received > 0 && <span className="summary-caption carryover-caption" data-testid="received-balance">
+              {summary.salary === null ? "Sobra recebida: " : "Inclui "}{formatMoney(summary.received)} de sobra de {monthLabel(shiftMonth(month, -1))}.{" "}
+              {summary.ownRemaining !== null && <span>Resultado deste mês: {formatMoney(summary.ownRemaining)}.</span>}
+            </span>}
+            {summary.transferred > 0 && <span className="summary-caption" data-testid="transferred-balance">
+              {formatMoney(summary.transferred)} levados para {monthLabel(shiftMonth(month, 1))}.
+            </span>}
+            {month && month < today.slice(0, 7) && (summary.transferred > 0 || (summary.remaining !== null && summary.remaining > 0)) && <Button
+              className="salary-edit transfer-button" variant="ghost" size="sm" disabled={disabled}
+              onClick={() => { setReturnFocus(document.activeElement as HTMLElement); setTransferMonth(month); }}>
+              <ArrowUpRight size={13} />{summary.transferred > 0 ? "Editar transferência de sobra" : "Levar sobra para o próximo mês"}
+            </Button>}
           </div>
         </section>
         <nav className="workspace-navigation" aria-label="Seções do sistema">
@@ -546,649 +498,19 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
               </p>
             </div>
           ) : page === "overview" ? (
-            <>
-              <div className="overview-main">
-                <div className="charts-grid">
-                  <FinanceChart
-                    title="Por categoria"
-                    slices={categoryGroups.map((g) => ({
-                      ...g,
-                      key: g.name,
-                      color:
-                        data.categories.find((c) => c.name === g.name)?.color ??
-                        "#31745b",
-                    }))}
-                    onSelect={selectCategory}
-                  />
-                  <FinanceChart
-                    title="Por tipo de gasto"
-                    slices={kindGroups.map((g) => ({
-                      ...g,
-                      key: g.name,
-                      name: KIND_LABELS[g.name as Expense["kind"]],
-                      color: {
-                        single: "#31745b",
-                        fixed: "#608fbc",
-                        installment: "#d19845",
-                        debt: "#8d79b5",
-                      }[g.name as Expense["kind"]],
-                    }))}
-                    onSelect={selectKind}
-                  />
-                </div>
-                <section className="panel expense-panel">
-                  <div className="panel-heading">
-                    <h2>
-                      Seus gastos{" "}
-                      <span className="expense-count">
-                        {allExpenses.length}
-                      </span>
-                    </h2>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        clearFilters();
-                        setPage("expenses");
-                      }}
-                    >
-                      Ver todos
-                      <ChevronRight size={14} />
-                    </Button>
-                  </div>
-                  <div className="panel-scroll">
-                    <ExpenseList
-                      {...listProps}
-                      expenses={allExpenses}
-                      hasExpenses={allExpenses.length > 0}
-                    />
-                  </div>
-                  <div className="panel-footer">
-                    <span>{allExpenses.length} gastos neste mês</span>
-                    <strong>{formatMoney(summary.total)}</strong>
-                  </div>
-                </section>
-              </div>
-              <aside className="overview-aside">
-                <section className="panel insights-panel">
-                  <div className="panel-heading">
-                    <h2>
-                      <Sparkles size={16} />
-                      Análise do mês
-                    </h2>
-                  </div>
-                  <div
-                    className="insights-body"
-                    tabIndex={0}
-                    role="region"
-                    aria-label="Detalhes da análise do mês"
-                  >
-                    <div className="salary-insight">
-                      <strong>
-                        {summary.salary !== null && summary.salary > 0
-                          ? `${Math.round((summary.total / summary.salary) * 100)}%`
-                          : "—"}
-                      </strong>
-                      <span>
-                        {summary.salary === null
-                          ? "Informe o salário para analisar o comprometimento."
-                          : summary.salary === 0
-                            ? "Salário zero: os gastos são exibidos na sobra prevista."
-                            : "do salário comprometido"}
-                      </span>
-                    </div>
-                    <div className="commitment-track">
-                      <span
-                        style={{
-                          width: `${summary.salary && summary.salary > 0 ? Math.min(100, (summary.total / summary.salary) * 100) : 0}%`,
-                        }}
-                      />
-                    </div>
-                    <p>
-                      {categoryGroups.length ? (
-                        <>
-                          <strong>{categoryGroups[0].name}</strong> concentra{" "}
-                          {(
-                            (categoryGroups[0].value / summary.total) *
-                            100
-                          ).toFixed(1)}
-                          % dos gastos.
-                        </>
-                      ) : (
-                        "Cadastre seus gastos para descobrir onde seu dinheiro está concentrado."
-                      )}
-                    </p>
-                    <p>
-                      {hasPrevious ? (
-                        <>
-                          Você registrou{" "}
-                          <strong>
-                            {formatMoney(
-                              Math.abs(summary.total - previous.total),
-                            )}{" "}
-                            {summary.total >= previous.total
-                              ? "a mais"
-                              : "a menos"}
-                          </strong>{" "}
-                          que no mês anterior.
-                        </>
-                      ) : (
-                        "Registre outro mês para comparar a evolução dos gastos."
-                      )}
-                    </p>
-                  </div>
-                </section>
-                <section className="panel upcoming-panel">
-                  <div className="panel-heading">
-                    <h2>
-                      <Clock3 size={15} />
-                      Próximos vencimentos
-                    </h2>
-                    <span className="expense-count">{upcoming.length}</span>
-                  </div>
-                  <div className="panel-scroll">
-                    {upcoming.length ? (
-                      upcoming.map((item) => (
-                        <button
-                          key={item.id}
-                          className="upcoming-item"
-                          onClick={() => {
-                            changeMonth(item.month);
-                            if (item.cardId) {
-                              setSelectedCard(item.cardId);
-                              setPage("cards");
-                            } else {
-                              setPage("expenses");
-                              setFilter("planned");
-                            }
-                          }}
-                        >
-                          <span>
-                            <strong>{item.description}</strong>
-                            <small
-                              className={item.date < today ? "overdue" : ""}
-                            >
-                              {dateLabel(item.date)}
-                              {item.date < today ? " · Em atraso" : ""}
-                            </small>
-                          </span>
-                          <strong>{formatMoney(item.amount)}</strong>
-                        </button>
-                      ))
-                    ) : (
-                      <p className="small-empty">
-                        Nenhum vencimento pendente neste mês ou no próximo.
-                      </p>
-                    )}
-                  </div>
-                </section>
-                <section className="panel forecast-panel">
-                  <div className="panel-heading">
-                    <h2>
-                      <ChartPie size={15} />
-                      Próximos meses
-                    </h2>
-                  </div>
-                  <div className="panel-scroll">
-                    {forecasts.map((item) => (
-                      <button
-                        key={item.month}
-                        className="forecast-item"
-                        onClick={() => changeMonth(item.month)}
-                      >
-                        <span>{monthLabel(item.month)}</span>
-                        <strong>{formatMoney(item.summary.total)}</strong>
-                      </button>
-                    ))}
-                  </div>
-                  <p className="forecast-hint">
-                    Compromissos cadastrados; valores podem mudar.
-                  </p>
-                </section>
-              </aside>
-            </>
+            <AnalyticsPanel data={data} month={month} today={today} onMonthChange={changeMonth} selectCategory={selectCategory} selectKind={selectKind} onOpenUpcoming={(cardId) => { if (cardId) {setSelectedCard(cardId); setPage("cards");} else {setFilter("planned"); setPage("expenses");} }} />
           ) : page === "expenses" ? (
-            <section className="panel expense-panel full-panel">
-              <div className="panel-heading expense-filters">
-                <h2>
-                  Seus gastos{" "}
-                  <span className="expense-count">{allExpenses.length}</span>
-                </h2>
-                <div
-                  className="status-filters"
-                  role="tablist"
-                  aria-label="Filtrar por situação"
-                >
-                  {(
-                    [
-                      ["all", "Todos"],
-                      ["planned", "Previstos"],
-                      ["paid", "Pagos"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      role="tab"
-                      aria-selected={filter === value}
-                      onClick={() => setFilter(value)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="filter-bar">
-                <div className="search-input">
-                  <Search size={15} />
-                  <Input
-                    aria-label="Buscar gastos"
-                    placeholder="Buscar um gasto…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </div>
-                <NativeSelect
-                  aria-label="Filtrar por categoria"
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                >
-                  <option value="">Todas as categorias</option>
-                  {data.categories.map((c) => (
-                    <option key={c.id}>{c.name}</option>
-                  ))}
-                </NativeSelect>
-                <NativeSelect
-                  aria-label="Filtrar por tipo"
-                  value={kindFilter}
-                  onChange={(e) => setKindFilter(e.target.value)}
-                >
-                  <option value="">Todos os tipos</option>
-                  {Object.entries(KIND_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </NativeSelect>
-                {search || filter !== "all" || categoryFilter || kindFilter ? (
-                  <Button size="sm" variant="ghost" onClick={clearFilters}>
-                    <X size={14} />
-                    Limpar
-                  </Button>
-                ) : null}
-              </div>
-              <div className="panel-scroll">
-                <ExpenseList
-                  {...listProps}
-                  expenses={filtered}
-                  hasExpenses={allExpenses.length > 0}
-                />
-              </div>
-              <div className="panel-footer">
-                <span>
-                  {filtered.length} de {allExpenses.length} gastos
-                </span>
-                <strong>
-                  Total exibido:{" "}
-                  {formatMoney(
-                    filtered.reduce((sum, e) => sum + e.amountCents, 0),
-                  )}
-                </strong>
-              </div>
-            </section>
+            <ExpensesPanel key={`${month}:${filter}:${categoryFilter}:${kindFilter}`} data={data} month={month} allExpenses={allExpenses} listProps={listProps} initialFilter={filter} initialCategory={categoryFilter} initialKind={kindFilter} />
           ) : page === "cards" ? (
-            <div className="cards-layout">
-              <section className="panel cards-list">
-                <div className="panel-heading">
-                  <h2>Seus cartões</h2>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label="Novo cartão"
-                    disabled={disabled}
-                    onClick={() => setCardForm({ card: null })}
-                  >
-                    <Plus size={16} />
-                  </Button>
-                </div>
-                <div className="panel-scroll">
-                  {data.cards.map((c) => {
-                    const i = invoiceSummary(data, c.id, month);
-                    return (
-                      <button
-                        key={c.id}
-                        className={`card-tile ${card?.id === c.id ? "selected" : ""}`}
-                        onClick={() => setSelectedCard(c.id)}
-                      >
-                        <span className="card-tile-title">
-                          <CardIcon size={18} />
-                          <strong>{c.name}</strong>
-                        </span>
-                        <strong className="card-tile-value">
-                          {formatMoney(i.total)}
-                        </strong>
-                        <small>
-                          Vence dia {c.dueDay} · {i.paid ? "Paga" : "Em aberto"}
-                        </small>
-                      </button>
-                    );
-                  })}
-                </div>
-                <Button
-                  variant="outline"
-                  className="new-card-button"
-                  onClick={() => setCardForm({ card: null })}
-                  disabled={disabled}
-                >
-                  <Plus size={14} />
-                  Adicionar cartão
-                </Button>
-              </section>
-              {card && invoice ? (
-                <section className="panel invoice-panel">
-                  <div className="panel-heading">
-                    <div>
-                      <h2>Fatura · {card.name}</h2>
-                      <p className="quiet-label">
-                        Vencimento {dateLabel(invoice.dueDate)} · Fechamento dia{" "}
-                        {card.closingDay}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setCardForm({ card })}
-                      disabled={disabled}
-                    >
-                      <Pencil size={13} />
-                      Editar cartão
-                    </Button>
-                  </div>
-                  <div className="invoice-overview">
-                    <div>
-                      <span className="quiet-label">Total da fatura</span>
-                      <strong>{formatMoney(invoice.total)}</strong>
-                      <span
-                        className={`expense-status ${invoice.paid ? "is-paid" : "is-planned"}`}
-                      >
-                        {invoice.paid
-                          ? "Paga"
-                          : invoice.dueDate < today
-                            ? "Em atraso"
-                            : "Em aberto"}
-                      </span>
-                    </div>
-                    <div className="invoice-actions">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={disabled || invoice.paid}
-                        onClick={() => openExpense(null, card.id)}
-                      >
-                        <Plus size={14} />
-                        Adicionar compra
-                      </Button>
-                      <Button
-                        size="sm"
-                        disabled={disabled || !invoice.items.length}
-                        onClick={() =>
-                          void finance.commit(
-                            (prev) =>
-                              setInvoicePaid(
-                                prev,
-                                card.id,
-                                month,
-                                !invoice.paid,
-                              ),
-                            invoice.paid
-                              ? "Quitação desfeita."
-                              : "Fatura quitada.",
-                          )
-                        }
-                      >
-                        {invoice.paid ? (
-                          <RefreshCw size={14} />
-                        ) : (
-                          <Check size={14} />
-                        )}
-                        {invoice.paid ? "Desfazer quitação" : "Quitar fatura"}
-                      </Button>
-                      {!data.invoices.some(
-                        (i) => i.cardId === card.id && i.month === month,
-                      ) ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={disabled}
-                          onClick={() =>
-                            void finance.commit(
-                              (prev) => ensureInvoice(prev, card.id, month),
-                              "Fatura criada.",
-                            )
-                          }
-                        >
-                          Criar fatura
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="panel-scroll invoice-items">
-                    <div className="invoice-group-heading">
-                      <h3>Compras em uma vez</h3>
-                      <strong>{formatMoney(invoice.singleTotal)}</strong>
-                    </div>
-                    {invoice.singles.length ? (
-                      <ExpenseList
-                        {...listProps}
-                        expenses={invoice.singles}
-                        hasExpenses
-                      />
-                    ) : (
-                      <p className="small-empty">
-                        Nenhuma compra em uma vez nesta fatura.
-                      </p>
-                    )}
-                    <div className="invoice-group-heading">
-                      <h3>Parcelas do mês</h3>
-                      <strong>{formatMoney(invoice.installmentTotal)}</strong>
-                    </div>
-                    {invoice.installments.length ? (
-                      <ExpenseList
-                        {...listProps}
-                        expenses={invoice.installments}
-                        hasExpenses
-                      />
-                    ) : (
-                      <p className="small-empty">Nenhuma parcela neste mês.</p>
-                    )}
-                  </div>
-                  <div className="panel-footer">
-                    <span>Compras e parcelas somadas uma única vez</span>
-                    <strong>{invoice.items.length} lançamentos</strong>
-                  </div>
-                </section>
-              ) : (
-                <section className="panel empty-state">
-                  <CardIcon size={30} />
-                  <h2>Suas faturas começam aqui</h2>
-                  <p>
-                    Adicione um cartão para reunir compras e parcelas por mês.
-                  </p>
-                  <Button
-                    onClick={() => setCardForm({ card: null })}
-                    disabled={disabled}
-                  >
-                    Cadastrar cartão
-                  </Button>
-                </section>
-              )}
-            </div>
+            <CardsPanel data={data} month={month} today={today} disabled={disabled} selectedCard={selectedCard} setSelectedCard={setSelectedCard} onEditCard={(card) => setCardForm({card})} openExpense={openExpense} commit={finance.commit} listProps={listProps} />
           ) : page === "installments" ? (
-            <section className="panel full-panel">
-              <div className="panel-heading">
-                <h2>
-                  Compras parceladas{" "}
-                  <span className="expense-count">{plans.length}</span>
-                </h2>
-                <span className="quiet-label">
-                  Em aberto:{" "}
-                  {formatMoney(plans.reduce((sum, p) => sum + p.remaining, 0))}
-                </span>
-              </div>
-              <div className="panel-scroll installment-list">
-                {plans.length ? (
-                  plans.map((plan) => (
-                    <article key={plan.id} className="installment-card">
-                      <div className="installment-heading">
-                        <div>
-                          <h3>{plan.description}</h3>
-                          <p>
-                            {plan.current
-                              ? `Parcela ${plan.current.installmentNumber}/${plan.totalInstallments} neste mês`
-                              : `Sem parcela em ${monthLabel(month)}`}{" "}
-                            · Término em {monthLabel(plan.lastMonth)}
-                          </p>
-                        </div>
-                        <strong>
-                          {formatMoney(plan.remaining)}
-                          <small>a pagar</small>
-                        </strong>
-                      </div>
-                      <div className="installment-progress">
-                        <span
-                          style={{
-                            width: `${(plan.paidCount / Math.max(plan.items.length, 1)) * 100}%`,
-                          }}
-                        />
-                      </div>
-                      <div className="installment-meta">
-                        <span>
-                          {plan.paidCount} quitadas · {plan.pendingCount}{" "}
-                          pendentes
-                        </span>
-                        {plan.firstInstallment > 1 ? (
-                          <span>
-                            {plan.firstInstallment - 1} anteriores: histórico
-                            informado
-                          </span>
-                        ) : null}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setExpandedPlan(
-                              expandedPlan === plan.id ? "" : plan.id,
-                            )
-                          }
-                        >
-                          {expandedPlan === plan.id
-                            ? "Ocultar parcelas"
-                            : "Ver parcelas"}
-                          <ChevronDown size={14} />
-                        </Button>
-                      </div>
-                      {expandedPlan === plan.id ? (
-                        <ExpenseList
-                          {...listProps}
-                          expenses={plan.items}
-                          hasExpenses
-                        />
-                      ) : null}
-                    </article>
-                  ))
-                ) : (
-                  <div className="empty-state">
-                    <Repeat2 size={30} />
-                    <h2>Nenhum parcelamento cadastrado</h2>
-                    <p>
-                      Ao adicionar um gasto, escolha o tipo Parcelado. Você
-                      também pode começar por uma parcela em andamento.
-                    </p>
-                    <Button variant="outline" onClick={() => openExpense()}>
-                      Adicionar gasto parcelado
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </section>
+            <InstallmentsPanel data={data} month={month} listProps={listProps} openExpense={() => openExpense()} />
           ) : page === "debts" ? (
             <DebtsPanel data={data} today={today} busy={busy} disabled={disabled} saveError={error} commit={finance.commit} />
           ) : page === "imports" ? (
             <ImportsPanel data={data} today={today} busy={busy} disabled={disabled} saveError={error} commit={finance.commit} />
           ) : (
-            <section className="panel full-panel">
-              <div className="panel-heading">
-                <div>
-                  <h2>Suas categorias</h2>
-                  <p className="quiet-label">
-                    Organize os gastos do seu jeito. Arquivar preserva o
-                    histórico.
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => setCategoryForm({ category: null })}
-                  disabled={disabled}
-                >
-                  <Plus size={14} />
-                  Nova categoria
-                </Button>
-              </div>
-              <div className="panel-scroll categories-grid">
-                {data.categories.map((category) => (
-                  <article
-                    key={category.id}
-                    className={`category-card ${category.archived ? "archived" : ""}`}
-                  >
-                    <CategoryMark category={category} />
-                    <div className="category-details">
-                      <h3>{category.name}</h3>
-                      <small>
-                        {category.archived
-                          ? "Arquivada"
-                          : `${allExpenses.filter((e) => e.category === category.name).length} gastos no mês`}
-                      </small>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Editar categoria ${category.name}`}
-                      disabled={disabled}
-                      onClick={() => setCategoryForm({ category })}
-                    >
-                      <Pencil size={14} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`${category.archived ? "Reativar" : "Arquivar"} categoria ${category.name}`}
-                      disabled={
-                        disabled ||
-                        (!category.archived &&
-                          data.categories.filter((c) => !c.archived).length ===
-                            1)
-                      }
-                      onClick={() =>
-                        void finance.commit(
-                          (prev) => ({
-                            ...prev,
-                            categories: prev.categories.map((c) =>
-                              c.id === category.id
-                                ? { ...c, archived: !c.archived }
-                                : c,
-                            ),
-                          }),
-                          category.archived
-                            ? "Categoria reativada."
-                            : "Categoria arquivada.",
-                        )
-                      }
-                    >
-                      <Archive size={14} />
-                    </Button>
-                  </article>
-                ))}
-              </div>
-            </section>
+            <CategoriesPanel data={data} allExpenses={allExpenses} disabled={disabled} onEditCategory={(category) => setCategoryForm({category})} commit={finance.commit} />
           )}
         </div>
         <footer className="workspace-footer">
@@ -1225,6 +547,11 @@ export function Dashboard({ account, cloudEnabled = false, historyUrl }: { accou
           if (saved && date.slice(0, 7) !== month) changeMonth(date.slice(0, 7));
           return saved;
         }} /> : null}
+      {transferMonth && <BalanceTransferDialog key={transferMonth} month={transferMonth}
+        available={monthSummary(data, transferMonth).remaining} existing={data.balanceTransfers[transferMonth] ?? 0}
+        busy={busy} returnFocus={returnFocus} onClose={() => setTransferMonth(null)}
+        onSave={(amount) => finance.commit((previous) => saveBalanceTransfer(previous, transferMonth, amount, today),
+          amount === null ? "Transferência removida." : "Sobra confirmada para o próximo mês.")} />}
       {expenseForm ? (
         <ExpenseEditor
           saveError={error}

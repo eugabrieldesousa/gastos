@@ -128,7 +128,7 @@ describe("datas e backups", () => {
     const invalid = [
       "not json",
       "null",
-      JSON.stringify({ ...data, version: 4 }),
+      JSON.stringify({ ...data, version: 5 }),
       JSON.stringify({ ...data, salaries: { "2026-13": 0 } }),
       JSON.stringify({
         ...data,

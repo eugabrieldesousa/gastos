@@ -1,4 +1,4 @@
-import { financeSchema, type FinanceData } from "./finance";
+import { financeSchema, parseFinanceData, type FinanceData } from "./finance";
 import { StorageConflictError, type FinanceRepository } from "./repository";
 import { financeSnapshotHash } from "./finance-snapshot";
 
@@ -23,7 +23,7 @@ export class RemoteFinanceRepository implements FinanceRepository {
       const result = await response.json().catch(() => null);
       throw new Error(result?.error || "Não foi possível salvar na sua conta. Tente novamente.");
     }
-    const data = financeSchema.parse(await response.json());
+    const data = parseFinanceData(await response.json());
     const hash = await financeSnapshotHash(data);
     if (generation === this.generation) this.loaded = { revision: data.revision, hash };
     return data;
